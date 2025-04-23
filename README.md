@@ -117,6 +117,11 @@ docker cp $container_name:/home/$container_user_name/file /path/to/local/
    - Check container logs: `docker logs $container_name`
    - Verify GPU support is available: `docker info | grep -i runtime`
 
+4. **SSH permission issues**
+   - If you encounter permission problems after SSH login:
+     1. First login to the container via terminal: `docker exec -it $container_name zsh`
+     2. Then use sudo to modify home directory permissions: `sudo chmod -R 777 /home/$container_user_name`
+
 ## Customization
 
 You can customize the Dockerfile to add additional packages or configurations based on your development needs.

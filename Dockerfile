@@ -49,6 +49,8 @@ RUN apt install -y \
     libopenblas-dev libffi-dev libssl-dev libjpeg-dev \
     libboost-all-dev htop rsync
 
+RUN apt clean && rm -rf /var/lib/apt/lists/*
+
 # Set the locale and timezone
 ENV TZ=Asia/Shanghai
 RUN locale-gen en_US.UTF-8 && \
@@ -68,10 +70,14 @@ RUN mkdir /var/run/sshd && \
 
 # Configure LLVM repository
 ENV LLVM_VERSION=18
-RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /etc/apt/trusted.gpg.d/llvm.gpg && \
-    echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${LLVM_VERSION} main\n" \
-         "deb-src http://apt.llvm.org/jammy/ llvm-toolchain-jammy-${LLVM_VERSION} main" \
-         > /etc/apt/sources.list.d/llvm.list
+# RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /etc/apt/trusted.gpg.d/llvm.gpg
+# RUN echo "deb http://apt.llvm.org/${distro_codename}/ llvm-toolchain-${distro_codename}-${LLVM_VERSION} main\n" \
+#          "deb-src http://apt.llvm.org/${distro_codename}/ llvm-toolchain-${distro_codename}-${LLVM_VERSION} main" \
+#          > /etc/apt/sources.list.d/llvm.list
+# Configure LLVM repository by mirrors.tuna.tsinghua.edu.cn
+ENV LLVM_VERSION=18
+RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /etc/apt/trusted.gpg.d/llvm.gpg && \
+    echo "deb [signed-by=/etc/apt/trusted.gpg.d/llvm.gpg] https://mirrors.tuna.tsinghua.edu.cn/llvm-apt/${distro_codename}/ llvm-toolchain-${distro_codename}-${LLVM_VERSION} main" > /etc/apt/sources.list.d/llvm.list
 
 # Install LLVM toolchain
 RUN apt update && apt install -y \
@@ -91,6 +97,9 @@ RUN apt update && apt install -y \
 USER ${USER_NAME}
 WORKDIR /home/${USER_NAME}
 
+# Copy scripts to user home dir
+COPY ./scripts/set_proxy.sh /home/${USER_NAME}/scripts/
+
 # # Install Oh My Zsh and plugins
 # RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
 #     git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions && \
@@ -105,6 +114,9 @@ RUN curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
 
 # Switch back to root for final configuration
 USER root
+
+# open home dir to everyone
+RUN chmod 777 /home/${USER_NAME}/
 
 # Expose SSH port
 EXPOSE 22
