@@ -18,14 +18,14 @@ docker build \
     --network host \
     .
 
-# # Run Docker container
-# docker run \
-#   -d --privileged \
-#   --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
-#   --name=$container_name \
-#   --runtime=nvidia --gpus all \
-#   -e HOST_PERMS="$(id -u):$(id -g)" \
-#   --label user=$container_user_name \
-#   -v /home/$host_user_name/workspace/$container_name:/home/$container_user_name \
-#   $image_name
+# Run Docker container
+docker run \
+  -d --privileged \
+  --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
+  --name=$container_name \
+  --runtime=nvidia --gpus all \
+  -e HOST_PERMS="$(id -u):$(id -g)" \
+  --label user=$container_user_name \
+  -v /home/$host_user_name/workspace/$container_name:/home/$container_user_name \
+  $image_name
 
