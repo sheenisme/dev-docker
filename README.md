@@ -1,6 +1,6 @@
 # Development Docker Environment
 
-A customized Docker development environment with NVIDIA GPU support, proper user permissions, and development tools pre-installed.
+A customized Docker development environment, and development tools pre-installed.
 
 ## Prerequisites
 
@@ -25,12 +25,12 @@ If you prefer to set up manually or customize the parameters:
 
 ```shell
 # Set build and run parameters
-host_user_name=guanghuis
-image_name=dev_image_guanghuis
-container_user_name=sheen
-container_name=dev_container_sheen
-container_passwd=sheen123456
-http_proxy=http://127.0.0.1:7890  # Set if needed
+host_user_name=guanghuis           # Set for yourself
+image_name=dev_image_guanghuis     # Set for yourself
+container_user_name=sheen          # Set for yourself
+container_name=dev_container_sheen # Set for yourself
+container_passwd=sheen123456       # Set for yourself
+http_proxy=http://127.0.0.1:7890   # Set if needed
 https_proxy=https://127.0.0.1:7890 # Set if needed
 
 # Build Docker image

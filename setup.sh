@@ -8,13 +8,13 @@
 set -e
 
 # Configuration variables
-host_user_name=guanghuis
-image_name=dev_image_guanghuis
-container_user_name=sheen
-container_name=dev_container_sheen
-container_passwd=sheen123456
-http_proxy=http://127.0.0.1:7890
-https_proxy=https://127.0.0.1:7890
+host_user_name=guanghuis           # Set for yourself
+image_name=dev_image_guanghuis     # Set for yourself
+container_user_name=sheen          # Set for yourself
+container_name=dev_container_sheen # Set for yourself
+container_passwd=sheen123456       # Set for yourself
+http_proxy=http://127.0.0.1:7890   # Set if needed
+https_proxy=https://127.0.0.1:7890 # Set if needed
 
 # Check if Docker is installed
 if ! command -v docker &> /dev/null; then
