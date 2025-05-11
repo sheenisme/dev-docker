@@ -66,6 +66,7 @@ RUN useradd -m -s $(which zsh) ${USER_NAME} && \
 RUN mkdir /var/run/sshd && \
     echo 'PermitRootLogin no' >> /etc/ssh/sshd_config && \
     echo 'PasswordAuthentication yes' >> /etc/ssh/sshd_config && \
+    echo 'PubkeyAuthentication yes' >> /etc/ssh/sshd_config && \
     echo "AllowUsers ${USER_NAME}" >> /etc/ssh/sshd_config
 
 # Configure LLVM repository
@@ -96,6 +97,12 @@ RUN apt update && apt install -y \
 # Configure user environment
 USER ${USER_NAME}
 WORKDIR /home/${USER_NAME}
+
+# Create .ssh directory for the user
+RUN mkdir -p /home/${USER_NAME}/.ssh && \
+    chmod 700 /home/${USER_NAME}/.ssh && \
+    touch /home/${USER_NAME}/.ssh/authorized_keys && \
+    chmod 600 /home/${USER_NAME}/.ssh/authorized_keys
 
 # Copy scripts to user home dir
 COPY ./scripts/set_proxy.sh /home/${USER_NAME}/scripts/
