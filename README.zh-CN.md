@@ -1,15 +1,29 @@
-<!-- 语言切换: [English](README.md) | [中文](README.zh-CN.md) -->
+🚀 **Welcome to the Development Docker Environment project!**  
+This repository provides a highly customizable Docker-based development environment with pre-installed tools and convenient scripts.  
+**We welcome everyone to contribute, improve, and keep this project up to date together!**
 
-# 开发用 Docker 环境
+🚀 **欢迎来到开发用 Docker 环境项目！**  
+本仓库提供了高度可定制的 Docker 开发环境，内置常用工具和便捷脚本。  
+**欢迎大家共同参与、完善和持续更新本项目！**
+
+[🇬🇧 English](README.md) | [🇨🇳 中文](README.zh-CN.md)
+
+---
+
+# 🐳 开发用 Docker 环境
 
 一个定制化的 Docker 开发环境，预装了常用开发工具。
 
-## 前置条件
+---
+
+## 📦 前置条件
 
 - 已正确安装并配置 Docker
 - 当前用户已加入 docker 用户组或具备 root 权限
 
-## 快速开始
+---
+
+## 🚀 快速开始
 
 最简单的方式是使用提供的 setup 脚本：
 
@@ -27,14 +41,14 @@ chmod +x setup.sh
 
 | 参数 | 说明                           |
 |------|--------------------------------|
-| -b   | 构建镜像、启动容器并显示 IP    |
-| -r   | 仅启动容器并显示 IP（跳过构建）|
-| -i   | 仅显示容器 IP                  |
-| -s   | 停止并删除容器                 |
-| -c   | 显示当前配置信息               |
-| -h   | 显示帮助信息                   |
+| `-b` | 构建镜像、启动容器并显示 IP    |
+| `-r` | 仅启动容器并显示 IP（跳过构建）|
+| `-i` | 仅显示容器 IP                  |
+| `-s` | 停止并删除容器                 |
+| `-c` | 显示当前配置信息               |
+| `-h` | 显示帮助信息                   |
 
-示例：
+**示例：**
 
 ```shell
 ./setup.sh -b   # 构建并启动
@@ -45,7 +59,9 @@ chmod +x setup.sh
 
 - 可通过设置 `HTTP_PROXY` 和 `HTTPS_PROXY` 环境变量为构建和运行配置代理。
 
-## 容器细节
+---
+
+## 🏗️ 容器细节
 
 - **默认容器用户：** `sheen`
 - **默认密码：** `sheen123456`
@@ -53,7 +69,9 @@ chmod +x setup.sh
 - **SSH 支持：** 容器暴露 22 端口，可通过 SSH 访问
 - **GPU 支持：** 如检测到 NVIDIA runtime 自动启用 GPU
 
-## 常用命令
+---
+
+## 🛠️ 常用命令
 
 ### 容器管理
 
@@ -98,7 +116,9 @@ docker cp /path/to/local/file $container_name:/home/$container_user_name/
 docker cp $container_name:/home/$container_user_name/file /path/to/local/
 ```
 
-## 代理配置
+---
+
+## 🌐 代理配置
 
 项目提供了代理管理脚本：
 
@@ -113,7 +133,9 @@ cd scripts
 
 - 脚本会自动为 `git`、`npm`、`pip`、`conda` 配置代理（如已安装）。
 
-## 常见问题排查
+---
+
+## 🧩 常见问题排查
 
 ### 常见问题
 
@@ -134,12 +156,22 @@ cd scripts
      1. 先通过终端进入容器：`docker exec -it $container_name zsh`
      2. 用 sudo 修改 home 目录权限：`sudo chmod -R 777 /home/$container_user_name`
 
-## 个性化定制
+---
+
+## 🎨 个性化定制
 
 - 你可以根据开发需求自定义 `Dockerfile`，添加额外软件包或配置。
 - `scripts/` 目录下的脚本可扩展自动化流程。
 
-## 参考链接
+---
+
+## 📚 参考链接
 - [Docker 官方文档](https://docs.docker.com/)
 - [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)
-- [参考: https://github.com/zhiqiangzz/docker-dev.git](https://github.com/zhiqiangzz/docker-dev.git) 
+- [参考: https://github.com/zhiqiangzz/docker-dev.git](https://github.com/zhiqiangzz/docker-dev.git)
+
+---
+
+## 📝 更新日志
+
+- **2025-05-29**：首次发布。

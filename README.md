@@ -1,15 +1,29 @@
-<!-- Switch language: [English](README.md) | [中文](README.zh-CN.md) -->
+🚀 **Welcome to the Development Docker Environment project!**  
+This repository provides a highly customizable Docker-based development environment with pre-installed tools and convenient scripts.  
+**We welcome everyone to contribute, improve, and keep this project up to date together!**
 
-# Development Docker Environment
+🚀 **欢迎来到开发用 Docker 环境项目！**  
+本仓库提供了高度可定制的 Docker 开发环境，内置常用工具和便捷脚本。  
+**欢迎大家共同参与、完善和持续更新本项目！**
+
+[🇬🇧 English](README.md) | [🇨🇳 中文](README.zh-CN.md)
+
+---
+
+# 🐳 Development Docker Environment
 
 A customized Docker development environment with pre-installed development tools.
 
-## Prerequisites
+---
+
+## 📦 Prerequisites
 
 - Docker installed and properly configured
 - User added to the docker group or root privileges
 
-## Quick Start
+---
+
+## 🚀 Quick Start
 
 The easiest way to set up the environment is to use the provided setup script:
 
@@ -27,14 +41,14 @@ You can use the following options with `setup.sh`:
 
 | Option | Description                                 |
 |--------|---------------------------------------------|
-| -b     | Build image, run container, and show IP     |
-| -r     | Run container and show IP (skip build)      |
-| -i     | Show container IP only                      |
-| -s     | Stop and remove the container               |
-| -c     | Show current configuration                  |
-| -h     | Display help message                        |
+| `-b`   | Build image, run container, and show IP     |
+| `-r`   | Run container and show IP (skip build)      |
+| `-i`   | Show container IP only                      |
+| `-s`   | Stop and remove the container               |
+| `-c`   | Show current configuration                  |
+| `-h`   | Display help message                        |
 
-Example:
+**Example:**
 
 ```shell
 ./setup.sh -b   # Build and run
@@ -45,7 +59,9 @@ Example:
 
 - `HTTP_PROXY` and `HTTPS_PROXY` can be set to configure proxy for build and runtime.
 
-## Container Details
+---
+
+## 🏗️ Container Details
 
 - **Default container user:** `sheen`
 - **Default password:** `sheen123456`
@@ -53,7 +69,9 @@ Example:
 - **SSH enabled:** Port 22 is exposed for SSH access.
 - **GPU support:** Automatically enabled if NVIDIA runtime is available.
 
-## Common Commands
+---
+
+## 🛠️ Common Commands
 
 ### Container Management
 
@@ -98,7 +116,9 @@ docker cp /path/to/local/file $container_name:/home/$container_user_name/
 docker cp $container_name:/home/$container_user_name/file /path/to/local/
 ```
 
-## Proxy Configuration
+---
+
+## 🌐 Proxy Configuration
 
 A helper script is provided for proxy management:
 
@@ -113,7 +133,9 @@ cd scripts
 
 - The script will also configure proxy for `git`, `npm`, `pip`, and `conda` if available.
 
-## Troubleshooting
+---
+
+## 🧩 Troubleshooting
 
 ### Common Issues
 
@@ -134,12 +156,22 @@ cd scripts
      1. First login to the container via terminal: `docker exec -it $container_name zsh`
      2. Then use sudo to modify home directory permissions: `sudo chmod -R 777 /home/$container_user_name`
 
-## Customization
+---
+
+## 🎨 Customization
 
 - You can customize the `Dockerfile` to add additional packages or configurations based on your development needs.
 - Scripts in the `scripts/` directory can be extended for more automation.
 
-## Reference Links
+---
+
+## 📚 Reference Links
 - [Docker Documentation](https://docs.docker.com/)
 - [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)
 - [Reference Original Repository: https://github.com/zhiqiangzz/docker-dev.git](https://github.com/zhiqiangzz/docker-dev.git)
+
+---
+
+## 📝 Changelog
+
+- **2025-05-29**: Initial release.
