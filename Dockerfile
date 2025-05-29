@@ -3,6 +3,8 @@ FROM ubuntu:jammy
 # User configuration
 ARG USER_NAME=sheen      # Default username if not provided
 ARG USER_PASSWD          # Password for the user (required)
+ARG HOST_USER_ID=1000    # Host user ID for proper permissions
+ARG HOST_GROUP_ID=1000   # Host group ID for proper permissions
 RUN test -n "${USER_PASSWD}" || { echo "USER_PASSWD not set"; exit 1; }
 
 # Environment variables for distribution information
@@ -65,8 +67,9 @@ RUN locale-gen en_US.UTF-8 && \
     update-locale LANG=en_US.UTF-8 && \
     ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
 
-# Create user with sudo privileges and set password
-RUN useradd -m -s $(which zsh) ${USER_NAME} && \
+# Create group with host GID first, then user with host UID/GID
+RUN groupadd -g ${HOST_GROUP_ID} ${USER_NAME} && \
+    useradd -m -u ${HOST_USER_ID} -g ${HOST_GROUP_ID} -s $(which zsh) ${USER_NAME} && \
     echo ${USER_NAME}:${USER_PASSWD} | chpasswd && \
     usermod -aG sudo ${USER_NAME}
 
@@ -79,10 +82,6 @@ RUN mkdir /var/run/sshd && \
 
 # Configure LLVM repository
 ENV LLVM_VERSION=18
-# RUN wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /etc/apt/trusted.gpg.d/llvm.gpg
-# RUN echo "deb http://apt.llvm.org/${distro_codename}/ llvm-toolchain-${distro_codename}-${LLVM_VERSION} main\n" \
-#          "deb-src http://apt.llvm.org/${distro_codename}/ llvm-toolchain-${distro_codename}-${LLVM_VERSION} main" \
-#          > /etc/apt/sources.list.d/llvm.list
 # Configure LLVM repository by mirrors.tuna.tsinghua.edu.cn
 RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /etc/apt/trusted.gpg.d/llvm.gpg && \
     echo "deb [signed-by=/etc/apt/trusted.gpg.d/llvm.gpg] https://mirrors.tuna.tsinghua.edu.cn/llvm-apt/${distro_codename}/ llvm-toolchain-${distro_codename}-${LLVM_VERSION} main" > /etc/apt/sources.list.d/llvm.list
@@ -111,13 +110,17 @@ RUN mkdir -p /home/${USER_NAME}/.ssh && \
     touch /home/${USER_NAME}/.ssh/authorized_keys && \
     chmod 600 /home/${USER_NAME}/.ssh/authorized_keys
 
-# Copy scripts to user home dir
-COPY ./scripts/set_proxy.sh /home/${USER_NAME}/scripts/
+# Create scripts directory and copy scripts
+RUN mkdir -p /home/${USER_NAME}/scripts
+COPY --chown=${USER_NAME}:${USER_NAME} ./scripts/ /home/${USER_NAME}/scripts/
+RUN chmod +x /home/${USER_NAME}/scripts/*.sh
 
-# # Install Oh My Zsh and plugins
-# RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended && \
-#     git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions && \
-#     git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
+# Install Oh My Zsh and plugins (with error handling for CI environments)
+RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true && \
+    if [ -d ~/.oh-my-zsh ]; then \
+        git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions || true && \
+        git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting || true; \
+    fi
 
 # Install Miniconda
 RUN curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh && \
@@ -129,8 +132,12 @@ RUN curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.s
 # Switch back to root for final configuration
 USER root
 
-# open home dir to everyone
-RUN chmod 777 /home/${USER_NAME}/
+# Set proper ownership for home directory
+RUN chown -R ${USER_NAME}:${USER_NAME} /home/${USER_NAME}
+
+# Create workspace directory if it doesn't exist
+RUN mkdir -p /home/${USER_NAME}/workspace && \
+    chown ${USER_NAME}:${USER_NAME} /home/${USER_NAME}/workspace
 
 # Expose SSH port
 EXPOSE 22

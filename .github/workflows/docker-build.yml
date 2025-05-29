@@ -1,51 +1,200 @@
-name: Docker Image CI
+name: Docker Development Environment CI
 
 on:
   push:
     branches:
       - main
+      - develop
   pull_request:
     branches:
       - main
+      - develop
+  workflow_dispatch:  # Allow manual trigger
+
+env:
+  # CI environment variable to control script behavior
+  CI: true
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
-
+    
+    strategy:
+      matrix:
+        # Test with different Ubuntu versions if needed
+        ubuntu-version: [latest]
+    
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
-
+      
+    - name: Set up Docker environment
+      run: |
+        # Ensure Docker is running
+        sudo systemctl start docker
+        sudo systemctl enable docker
+        
+        # Add current user to docker group (though we'll use sudo for CI)
+        sudo usermod -aG docker $USER
+        
+    - name: Free up disk space
+      run: |
+        # Remove unnecessary packages to free up space
+        sudo apt-get remove -y '^dotnet-.*'
+        sudo apt-get remove -y '^llvm-.*'
+        sudo apt-get remove -y 'php.*'
+        sudo apt-get autoremove -y
+        sudo apt-get clean
+        
+        # Show available disk space
+        df -h
+        
+    - name: Create scripts directory
+      run: |
+        mkdir -p scripts
+        # Create a dummy set_proxy.sh if it doesn't exist
+        if [ ! -f scripts/set_proxy.sh ]; then
+          echo '#!/bin/bash' > scripts/set_proxy.sh
+          echo 'echo "Proxy script placeholder"' >> scripts/set_proxy.sh
+          chmod +x scripts/set_proxy.sh
+        fi
+        
     - name: Make setup.sh executable
       run: chmod +x ./setup.sh
-
-    - name: Run setup.sh to build and run Docker image
-      id: run_setup
+      
+    - name: Show configuration
+      run: ./setup.sh -c
+      
+    - name: Build Docker image and run container
+      id: build_and_run
       run: |
+        # Run the setup script to build and run the container
         ./setup.sh -b
-
-    - name: Get container name
-      id: get_container_name
-      run: |
-        # Assuming setup.sh prints container info including name
-        # This might need adjustment based on actual setup.sh output format
-        CONTAINER_NAME=$(docker ps --filter "label=user=sheen" --format '{{.Names}}')
+        
+        # Capture container name for later steps
+        CONTAINER_NAME=$(docker ps --filter "label=host_user=$(whoami)" --format '{{.Names}}' | head -n1)
         echo "container_name=$CONTAINER_NAME" >> $GITHUB_OUTPUT
-      # Ensure this step runs even if the previous one fails to allow cleanup
-      if: always()
-
-    - name: Verify container user home directory
-      # Only run if container name was found
-      if: steps.get_container_name.outputs.container_name != ''
+        echo "Container name: $CONTAINER_NAME"
+        
+    - name: Verify container is running
+      if: steps.build_and_run.outputs.container_name != ''
       run: |
-        CONTAINER_NAME=${{ steps.get_container_name.outputs.container_name }}
+        CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
         echo "Verifying container: $CONTAINER_NAME"
-        docker exec $CONTAINER_NAME ls -la /home/sheen
-
-    - name: Stop and remove container
-      # Always attempt to clean up the container if its name was found
-      if: steps.get_container_name.outputs.container_name != ''
+        
+        # Check container status
+        docker ps --filter "name=$CONTAINER_NAME"
+        
+        # Check container logs
+        echo "Container logs:"
+        docker logs "$CONTAINER_NAME" || true
+        
+    - name: Test container functionality
+      if: steps.build_and_run.outputs.container_name != ''
       run: |
-        CONTAINER_NAME=${{ steps.get_container_name.outputs.container_name }}
-        echo "Stopping and removing container: $CONTAINER_NAME"
-        docker rm -f $CONTAINER_NAME
+        CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        
+        # Test basic container functionality
+        echo "Testing container functionality..."
+        
+        # Test if SSH service is running
+        docker exec "$CONTAINER_NAME" systemctl status ssh || docker exec "$CONTAINER_NAME" service ssh status || true
+        
+        # Test user home directory
+        echo "Checking user home directory:"
+        docker exec "$CONTAINER_NAME" ls -la /home/sheen/
+        
+        # Test installed packages
+        echo "Testing installed packages:"
+        docker exec "$CONTAINER_NAME" which clang || true
+        docker exec "$CONTAINER_NAME" which python3 || true
+        docker exec "$CONTAINER_NAME" which git || true
+        
+        # Test conda installation
+        echo "Testing conda installation:"
+        docker exec -u sheen "$CONTAINER_NAME" bash -c 'source ~/.zshrc && which conda' || true
+        
+        # Test workspace mount
+        echo "Testing workspace mount:"
+        docker exec "$CONTAINER_NAME" ls -la /home/sheen/workspace/ || true
+        
+    - name: Test container IP and SSH connectivity
+      if: steps.build_and_run.outputs.container_name != ''
+      run: |
+        CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        
+        # Get container IP
+        ./setup.sh -i || true
+        
+        # Test SSH connectivity (without actually connecting)
+        CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER_NAME")
+        if [ -n "$CONTAINER_IP" ]; then
+          echo "Container IP: $CONTAINER_IP"
+          # Test if SSH port is listening
+          docker exec "$CONTAINER_NAME" netstat -tlnp | grep :22 || true
+        fi
+        
+    - name: Run security and health checks
+      if: steps.build_and_run.outputs.container_name != ''
+      run: |
+        CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        
+        # Check for common security issues
+        echo "Running security checks..."
+        
+        # Check if user has proper sudo access
+        docker exec -u sheen "$CONTAINER_NAME" sudo -l || true
+        
+        # Check file permissions
+        docker exec "$CONTAINER_NAME" ls -la /home/sheen/.ssh/ || true
+        
+        # Check system resources
+        docker exec "$CONTAINER_NAME" free -h || true
+        docker exec "$CONTAINER_NAME" df -h || true
+        
+    - name: Export container information
+      if: steps.build_and_run.outputs.container_name != ''
+      run: |
+        CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        
+        # Export container info for debugging
+        echo "Container information:" > container_info.txt
+        docker inspect "$CONTAINER_NAME" >> container_info.txt
+        
+        # Save container logs
+        docker logs "$CONTAINER_NAME" > container_logs.txt 2>&1 || true
+        
+    - name: Upload artifacts on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-info
+        path: |
+          container_info.txt
+          container_logs.txt
+        retention-days: 7
+        
+    - name: Clean up container
+      if: always() && steps.build_and_run.outputs.container_name != ''
+      run: |
+        CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        echo "Cleaning up container: $CONTAINER_NAME"
+        
+        # Stop and remove container
+        docker rm -f "$CONTAINER_NAME" || true
+        
+        # Optional: Remove image to save space (comment out if you want to keep it)
+        # IMAGE_NAME="dev_image_$(whoami)"
+        # docker rmi "$IMAGE_NAME" || true
+        
+    - name: Show final disk usage
+      if: always()
+      run: |
+        echo "Final disk usage:"
+        df -h
+        
+        echo "Docker images:"
+        docker images
+        
+        echo "Docker containers:"
+        docker ps -a

@@ -19,40 +19,6 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-## Manual Setup
-
-If you prefer to set up manually or customize the parameters:
-
-```shell
-# Set build and run parameters
-host_user_name=guanghuis           # Set for yourself
-image_name=dev_image_guanghuis     # Set for yourself
-container_user_name=sheen          # Set for yourself
-container_name=dev_container_sheen # Set for yourself
-container_passwd=sheen123456       # Set for yourself
-http_proxy=http://127.0.0.1:7890   # Set if needed
-https_proxy=https://127.0.0.1:7890 # Set if needed
-
-# Build Docker image
-docker build \
-    --build-arg USER_NAME=$container_user_name \
-    --build-arg USER_PASSWD=$container_passwd \
-    -t $image_name \
-    --network host \
-    .
-
-# Run Docker container
-docker run \
-  -d --privileged \
-  --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
-  --name=$container_name \
-  --runtime=nvidia --gpus all \
-  -e HOST_PERMS="$(id -u):$(id -g)" \
-  --label user=$container_user_name \
-  -v /home/$host_user_name/workspace/$container_name:/home/$container_user_name \
-  $image_name
-```
-
 ## Common Commands
 
 ### Container Management
