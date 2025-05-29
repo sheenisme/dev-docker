@@ -8,13 +8,13 @@
 set -e
 
 # Configuration variables
-host_user_name=guanghuis           # Set for yourself
-image_name=dev_image_guanghuis     # Set for yourself
-container_user_name=sheen          # Set for yourself
-container_name=dev_container_sheen # Set for yourself
-container_passwd=sheen123456       # Set for yourself
-http_proxy=http://127.0.0.1:7890   # Set if needed
-https_proxy=https://127.0.0.1:7890 # Set if needed
+host_user_name=$(whoami)                              # Set for yourself
+image_name="dev_image_${host_user_name}"              # Set for yourself
+container_user_name=sheen                             # Set for yourself
+container_name="dev_container_${container_user_name}" # Set for yourself
+container_passwd=123456                               # Set for yourself
+http_proxy=http://127.0.0.1:7890                      # Set if needed
+https_proxy=https://127.0.0.1:7890                    # Set if needed
 
 # Function to display usage information
 show_usage() {
@@ -22,7 +22,7 @@ show_usage() {
     echo "Options:"
     echo "  -b    Build image, run container, and query IP"
     echo "  -r    Run container and query IP (skip build)"
-    echo "  -i   Query and print container IP only"
+    echo "  -i    Query and print container IP only"
     echo "  -h    Display this help message"
     echo "  No option will execute all operations (default)"
 }
@@ -83,7 +83,6 @@ run_container() {
       -d --privileged \
       --cap-add=SYS_PTRACE --security-opt seccomp=unconfined \
       --name=$container_name \
-      --runtime=nvidia --gpus all \
       -e HOST_PERMS="$(id -u):$(id -g)" \
       --label user=$container_user_name \
       -v /home/$host_user_name/workspace/$container_name:/home/$container_user_name \
