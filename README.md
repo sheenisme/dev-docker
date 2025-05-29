@@ -168,7 +168,7 @@ cd scripts
 ## 📚 Reference Links
 - [Docker Documentation](https://docs.docker.com/)
 - [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)
-- [Reference Original Repository: https://github.com/zhiqiangzz/docker-dev.git](https://github.com/zhiqiangzz/docker-dev.git)
+- [Reference Repository](https://github.com/zhiqiangzz/docker-dev.git)
 
 ---
 

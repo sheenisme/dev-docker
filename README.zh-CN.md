@@ -168,7 +168,7 @@ cd scripts
 ## 📚 参考链接
 - [Docker 官方文档](https://docs.docker.com/)
 - [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)
-- [参考: https://github.com/zhiqiangzz/docker-dev.git](https://github.com/zhiqiangzz/docker-dev.git)
+- [参考仓库](https://github.com/zhiqiangzz/docker-dev.git)
 
 ---
 
