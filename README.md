@@ -59,12 +59,51 @@ You can use the following options with `setup.sh`:
 
 - `HTTP_PROXY` and `HTTPS_PROXY` can be set to configure proxy for build and runtime.
 
+## ⚠️ Note
+
+> **Default container password is `123456`.**  
+> You can customize the container username, password, image name, and container name by editing the variables at the top of `setup.sh` before building/running the container.
+
+> **SSH Access via Jump Host (Bastion/Frontend Machine):**
+>
+> If your development host is behind a jump host (bastion/"frontend machine"), you can connect to the Docker container in two steps:
+>
+> 1. **SSH to the jump host (frontend machine)**
+> 2. **SSH from the jump host to your Docker container**
+>
+> To simplify this, you can use an SSH config file (usually at `~/.ssh/config`) like this:
+>
+> ```ssh-config
+> Host my-docker
+>     HostName <container_ip>
+>     User sheen
+>     Port 22
+>     ProxyJump my-jump
+>
+> Host my-jump
+>     HostName <jump_host_ip>
+>     User <your_jump_host_user>
+>     Port 22
+> ```
+>
+> - Replace `<container_ip>` with the IP address of your Docker container (see "SSH Connection" section above).
+> - Replace `<jump_host_ip>` and `<your_jump_host_user>` with your jump host's IP and username.
+> - After saving, you can connect to the container from your local machine with:
+>
+> ```shell
+> ssh my-docker
+> ```
+>
+> This will automatically connect through the jump host to your Docker container. Make sure your jump host can reach the container's IP, and that the container's SSH port is open.
+> 
+> **Tip:** If you use a private key for authentication, you can add `IdentityFile ~/.ssh/your_key` under the corresponding `Host` section.
+
 ---
 
 ## 🏗️ Container Details
 
 - **Default container user:** `sheen`
-- **Default password:** `sheen123456`
+- **Default password:** `123456`
 - **Workspace mount:** Host's `~/workspace/dev_container_sheen` is mounted to `/home/sheen/workspace` in the container.
 - **SSH enabled:** Port 22 is exposed for SSH access.
 - **GPU support:** Automatically enabled if NVIDIA runtime is available.

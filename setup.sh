@@ -8,17 +8,17 @@
 set -e
 
 # Auto-detect configuration variables
-host_user_name=$(whoami)                           # Auto-detect current user
+host_user_name=$(whoami)                          # Auto-detect current user
 host_user_id=$(id -u)                             # Get current user ID
 host_group_id=$(id -g)                            # Get current user group ID
 host_home_dir=$(eval echo ~$host_user_name)       # Get home directory
 workspace_dir="$host_home_dir/workspace"          # Workspace directory
 
 # Derived configuration
-image_name="dev_image_${host_user_name}"           # Image name based on host user
-container_user_name="sheen"                       # Container user name
+image_name="dev_image_${host_user_name}"               # Image name based on host user
+container_user_name="sheen"                            # Container user name
 container_name="dev_container_${container_user_name}"  # Container name based on host user
-container_passwd="sheen123456"                     # Container user password
+container_passwd="123456"                              # Container user password
 
 # Network and proxy configuration (set if needed)
 http_proxy="${HTTP_PROXY:-}"                       # Use env var or empty

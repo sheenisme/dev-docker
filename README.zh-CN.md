@@ -59,6 +59,45 @@ chmod +x setup.sh
 
 - 可通过设置 `HTTP_PROXY` 和 `HTTPS_PROXY` 环境变量为构建和运行配置代理。
 
+## ⚠️ 注意
+
+> **默认容器用户密码为 `123456`。**  
+> 你可以在构建/运行容器前，编辑 `setup.sh` 顶部的变量，自定义容器用户名、密码、镜像名、容器名等参数。
+
+> **通过跳板机（前端机）SSH 访问 Docker 容器：**
+>
+> 如果你的开发主机在跳板机（也叫 bastion/前端机）之后，可以分两步连接到 Docker 容器：
+>
+> 1. **先 SSH 到跳板机（前端机）**
+> 2. **再从跳板机 SSH 到你的 Docker 容器**
+>
+> 推荐在本地 `~/.ssh/config` 文件中添加如下配置，简化操作：
+>
+> ```ssh-config
+> Host my-docker
+>     HostName <container_ip>
+>     User sheen
+>     Port 22
+>     ProxyJump my-jump
+>
+> Host my-jump
+>     HostName <jump_host_ip>
+>     User <your_jump_host_user>
+>     Port 22
+> ```
+>
+> - `<container_ip>` 替换为你的 Docker 容器 IP（见上文“SSH 连接”部分获取）。
+> - `<jump_host_ip>` 和 `<your_jump_host_user>` 替换为跳板机的 IP 和用户名。
+> - 保存后，你可以直接在本地终端输入：
+>
+> ```shell
+> ssh my-docker
+> ```
+>
+> 这样会自动通过跳板机转发连接到 Docker 容器。请确保跳板机能访问容器 IP，且容器 22 端口已开放。
+>
+> **小贴士：** 如果你用密钥认证，可以在对应 `Host` 下加一行 `IdentityFile ~/.ssh/your_key`。
+
 ---
 
 ## 🏗️ 容器细节
