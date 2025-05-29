@@ -40,7 +40,15 @@ RUN apt install -y \
     libstdc++-12-dev \
     cmake \
     make \
-    ninja-build 
+    ninja-build \
+    automake \
+    autoconf \
+    libtool \
+    pkg-config \
+    libomp-dev \
+    libgmp-dev \
+    libyaml-dev \
+    libmpfr-dev
 
 RUN apt install -y \
     build-essential \
@@ -76,7 +84,6 @@ ENV LLVM_VERSION=18
 #          "deb-src http://apt.llvm.org/${distro_codename}/ llvm-toolchain-${distro_codename}-${LLVM_VERSION} main" \
 #          > /etc/apt/sources.list.d/llvm.list
 # Configure LLVM repository by mirrors.tuna.tsinghua.edu.cn
-ENV LLVM_VERSION=18
 RUN curl -fsSL https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor > /etc/apt/trusted.gpg.d/llvm.gpg && \
     echo "deb [signed-by=/etc/apt/trusted.gpg.d/llvm.gpg] https://mirrors.tuna.tsinghua.edu.cn/llvm-apt/${distro_codename}/ llvm-toolchain-${distro_codename}-${LLVM_VERSION} main" > /etc/apt/sources.list.d/llvm.list
 
@@ -87,7 +94,7 @@ RUN apt update && apt install -y \
     lldb-${LLVM_VERSION} \
     llvm-${LLVM_VERSION} \
     clangd-${LLVM_VERSION} \
-    libstdc++-12-dev && \
+    libclang-${LLVM_VERSION}-dev && \
     update-alternatives --install /usr/bin/clang clang /usr/bin/clang-${LLVM_VERSION} 100 && \
     update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-${LLVM_VERSION} 100 && \
     update-alternatives --install /usr/bin/lld lld /usr/bin/lld-${LLVM_VERSION} 100 && \
