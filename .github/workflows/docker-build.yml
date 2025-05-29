@@ -16,13 +16,36 @@ jobs:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Build Docker image
-      run: |
-        docker build \
-          --build-arg USER_NAME=github_user \
-          --build-arg USER_PASSWD=github_password \
-          -t my-dev-docker:latest .
+    - name: Make setup.sh executable
+      run: chmod +x ./setup.sh
 
-    - name: Run a test command in the container (optional)
+    - name: Run setup.sh to build and run Docker image
+      id: run_setup
       run: |
-        docker run --rm my-dev-docker:latest ls -la /home/github_user
+        ./setup.sh -b
+
+    - name: Get container name
+      id: get_container_name
+      run: |
+        # Assuming setup.sh prints container info including name
+        # This might need adjustment based on actual setup.sh output format
+        CONTAINER_NAME=$(docker ps --filter "label=user=sheen" --format '{{.Names}}')
+        echo "container_name=$CONTAINER_NAME" >> $GITHUB_OUTPUT
+      # Ensure this step runs even if the previous one fails to allow cleanup
+      if: always()
+
+    - name: Verify container user home directory
+      # Only run if container name was found
+      if: steps.get_container_name.outputs.container_name != ''
+      run: |
+        CONTAINER_NAME=${{ steps.get_container_name.outputs.container_name }}
+        echo "Verifying container: $CONTAINER_NAME"
+        docker exec $CONTAINER_NAME ls -la /home/sheen
+
+    - name: Stop and remove container
+      # Always attempt to clean up the container if its name was found
+      if: steps.get_container_name.outputs.container_name != ''
+      run: |
+        CONTAINER_NAME=${{ steps.get_container_name.outputs.container_name }}
+        echo "Stopping and removing container: $CONTAINER_NAME"
+        docker rm -f $CONTAINER_NAME
