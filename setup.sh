@@ -105,7 +105,7 @@ query_ip() {
     echo "SSH command: ssh $container_user_name@$container_ip"
 
     # Log container info for future reference
-    echo "$container_name info: $container_user_name@$container_ip" >> /home/$host_user_name/workspace/container_ip.log
+    echo "$container_name info: $container_user_name@$container_ip"
 }
 
 # Parse command line options
