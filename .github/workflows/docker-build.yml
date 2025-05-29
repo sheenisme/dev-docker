@@ -1,0 +1,28 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Build Docker image
+      run: |
+        docker build \
+          --build-arg USER_NAME=github_user \
+          --build-arg USER_PASSWD=github_password \
+          -t my-dev-docker:latest .
+
+    - name: Run a test command in the container (optional)
+      run: |
+        docker run --rm my-dev-docker:latest ls -la /home/github_user
