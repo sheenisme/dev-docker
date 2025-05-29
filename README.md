@@ -1,6 +1,8 @@
+<!-- Switch language: [English](README.md) | [中文](README.zh-CN.md) -->
+
 # Development Docker Environment
 
-A customized Docker development environment, and development tools pre-installed.
+A customized Docker development environment with pre-installed development tools.
 
 ## Prerequisites
 
@@ -15,9 +17,41 @@ The easiest way to set up the environment is to use the provided setup script:
 # Make the script executable
 chmod +x setup.sh
 
-# Run the setup script
+# Run the setup script (default: build image, run container, show IP)
 ./setup.sh
 ```
+
+### Script Options
+
+You can use the following options with `setup.sh`:
+
+| Option | Description                                 |
+|--------|---------------------------------------------|
+| -b     | Build image, run container, and show IP     |
+| -r     | Run container and show IP (skip build)      |
+| -i     | Show container IP only                      |
+| -s     | Stop and remove the container               |
+| -c     | Show current configuration                  |
+| -h     | Display help message                        |
+
+Example:
+
+```shell
+./setup.sh -b   # Build and run
+./setup.sh -s   # Stop and remove container
+```
+
+### Environment Variables
+
+- `HTTP_PROXY` and `HTTPS_PROXY` can be set to configure proxy for build and runtime.
+
+## Container Details
+
+- **Default container user:** `sheen`
+- **Default password:** `sheen123456`
+- **Workspace mount:** Host's `~/workspace/dev_container_sheen` is mounted to `/home/sheen/workspace` in the container.
+- **SSH enabled:** Port 22 is exposed for SSH access.
+- **GPU support:** Automatically enabled if NVIDIA runtime is available.
 
 ## Common Commands
 
@@ -52,9 +86,6 @@ container_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddres
 # Display container IP for SSH connection
 echo "Container IP: $container_ip"
 echo "SSH command: ssh $container_user_name@$container_ip"
-
-# Log container IP for future reference
-echo "$container_user_name@$container_ip" >> /home/$host_user_name/workspace/container_ip.log
 ```
 
 ### File Transfer
@@ -67,6 +98,21 @@ docker cp /path/to/local/file $container_name:/home/$container_user_name/
 docker cp $container_name:/home/$container_user_name/file /path/to/local/
 ```
 
+## Proxy Configuration
+
+A helper script is provided for proxy management:
+
+```shell
+cd scripts
+./set_proxy.sh -s [PROXY_URL]   # Set proxy (use default if not provided)
+./set_proxy.sh -u               # Unset proxy
+./set_proxy.sh -t               # Test proxy connection
+./set_proxy.sh -st              # Show current proxy status
+./set_proxy.sh -h               # Show help
+```
+
+- The script will also configure proxy for `git`, `npm`, `pip`, and `conda` if available.
+
 ## Troubleshooting
 
 ### Common Issues
@@ -76,8 +122,8 @@ docker cp $container_name:/home/$container_user_name/file /path/to/local/
    - Log out and log back in for changes to take effect
 
 2. **Network connectivity issues**
-   - If container can't access the internet, try setting HTTP/HTTPS proxies
-   - Uncomment the proxy arguments in the build command
+   - If the container can't access the internet, try setting HTTP/HTTPS proxies
+   - Use the proxy helper script or set environment variables
 
 3. **Container startup failures**
    - Check container logs: `docker logs $container_name`
@@ -90,7 +136,8 @@ docker cp $container_name:/home/$container_user_name/file /path/to/local/
 
 ## Customization
 
-You can customize the Dockerfile to add additional packages or configurations based on your development needs.
+- You can customize the `Dockerfile` to add additional packages or configurations based on your development needs.
+- Scripts in the `scripts/` directory can be extended for more automation.
 
 ## Reference Links
 - [Docker Documentation](https://docs.docker.com/)
