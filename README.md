@@ -64,11 +64,11 @@ You can use the following options with `setup.sh`:
 > **Default container password is `123456`.**  
 > You can customize the container username, password, image name, and container name by editing the variables at the top of `setup.sh` before building/running the container.
 
-> **SSH Access via Jump Host (Bastion/Host):**
+> **SSH Access via Jump Host:**
 >
-> If your development host is behind a jump host (bastion/"Host"), you can connect to the Docker container in two steps:
+> If your development host is behind a jump host, you can connect to the Docker container in two steps:
 >
-> 1. **SSH to the jump host (Host)**
+> 1. **SSH to the jump host**
 > 2. **SSH from the jump host to your Docker container**
 >
 > To simplify this, you can use an SSH config file (usually at `~/.ssh/config`) like this:

@@ -115,19 +115,80 @@ RUN mkdir -p /home/${USER_NAME}/scripts
 COPY --chown=${USER_NAME}:${USER_NAME} ./scripts/ /home/${USER_NAME}/scripts/
 RUN chmod +x /home/${USER_NAME}/scripts/*.sh
 
-# Install Oh My Zsh and plugins (with error handling for CI environments)
-RUN sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended || true && \
-    if [ -d ~/.oh-my-zsh ]; then \
-        git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions || true && \
-        git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting || true; \
-    fi
+# Create basic zshrc in case Oh My Zsh installation fails
+RUN echo '# Basic zsh configuration\n\
+bindkey -e\n\
+autoload -Uz compinit\n\
+compinit\n\
+setopt autocd\n\
+setopt extendedglob\n\
+setopt prompt_subst\n\
+\n\
+# Basic prompt\n\
+if [[ ! -f ~/.oh-my-zsh/oh-my-zsh.sh ]]; then\n\
+  PS1="%F{green}%n@%m:%F{blue}%~%f $ "\n\
+  echo "Oh My Zsh not installed. To install manually run:"\n\
+  echo "sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)\""\n\
+fi\n\
+\n\
+# History settings\n\
+HISTFILE=~/.zsh_history\n\
+HISTSIZE=10000\n\
+SAVEHIST=10000\n\
+setopt appendhistory\n\
+' > /home/${USER_NAME}/.zshrc_basic
 
-# Install Miniconda
-RUN curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh && \
+# Try to install Oh My Zsh and plugins, but continue on failure
+RUN set +e && \
+    sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended; zsh_exit=$?; \
+    if [ $zsh_exit -eq 0 ]; then \
+      echo "Oh My Zsh installed successfully"; \
+      git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions || true; \
+      git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting || true; \
+      if [ -f ~/.zshrc ]; then \
+        sed -i 's/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/' ~/.zshrc || true; \
+        echo 'export ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=#a0a0a0"' >> ~/.zshrc; \
+        echo 'ZSH_DISABLE_COMPFIX="true"' >> ~/.zshrc; \
+        echo 'DISABLE_AUTO_UPDATE="true"' >> ~/.zshrc; \
+        echo 'ZSH_THEME="robbyrussell"' >> ~/.zshrc; \
+      fi; \
+    else \
+      echo "Oh My Zsh installation failed - using basic zsh configuration"; \
+      cp /home/${USER_NAME}/.zshrc_basic /home/${USER_NAME}/.zshrc; \
+    fi; \
+    set -e
+
+# Install Miniconda (with error handling)
+RUN set +e && \
+    echo "Attempting to install Miniconda..." && \
+    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh && \
     bash miniconda.sh -b -p $HOME/miniconda3 && \
     rm miniconda.sh && \
     echo 'export PATH="$HOME/miniconda3/bin:$PATH"' >> ~/.zshrc && \
-    $HOME/miniconda3/bin/conda init zsh
+    if [ -d "$HOME/miniconda3/bin" ]; then \
+      $HOME/miniconda3/bin/conda init zsh || true; \
+      echo "Miniconda installed successfully"; \
+    else \
+      echo "Miniconda installation failed - path will need to be set manually"; \
+    fi; \
+    set -e
+
+# Add nice terminal prompt customization
+RUN echo '\n# Custom terminal settings' >> ~/.zshrc && \
+    echo 'export TERM="xterm-256color"' >> ~/.zshrc && \
+    echo 'export LANG="en_US.UTF-8"' >> ~/.zshrc && \
+    echo '\n# Installation helper functions' >> ~/.zshrc && \
+    echo 'function install_omz() {' >> ~/.zshrc && \
+    echo '  echo "Installing Oh My Zsh..."' >> ~/.zshrc && \
+    echo '  sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"' >> ~/.zshrc && \
+    echo '}' >> ~/.zshrc && \
+    echo 'function install_zsh_plugins() {' >> ~/.zshrc && \
+    echo '  echo "Installing zsh plugins..."' >> ~/.zshrc && \
+    echo '  git clone --depth=1 https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions' >> ~/.zshrc && \
+    echo '  git clone --depth=1 https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting' >> ~/.zshrc && \
+    echo '  sed -i '\''s/plugins=(git)/plugins=(git zsh-autosuggestions zsh-syntax-highlighting)/'\'' ~/.zshrc' >> ~/.zshrc && \
+    echo '  echo "Please restart your shell to apply changes"' >> ~/.zshrc && \
+    echo '}' >> ~/.zshrc
 
 # Switch back to root for final configuration
 USER root
@@ -138,6 +199,10 @@ RUN chown -R ${USER_NAME}:${USER_NAME} /home/${USER_NAME}
 # Create workspace directory if it doesn't exist
 RUN mkdir -p /home/${USER_NAME}/workspace && \
     chown ${USER_NAME}:${USER_NAME} /home/${USER_NAME}/workspace
+
+# Copy zshrc to /etc/skel to ensure it's used for new SSH sessions
+RUN cp /home/${USER_NAME}/.zshrc /etc/skel/.zshrc && \
+    chown root:root /etc/skel/.zshrc
 
 # Expose SSH port
 EXPOSE 22
