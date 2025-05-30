@@ -70,15 +70,19 @@ jobs:
     - name: Build Docker image and run container using setup.sh
       id: build_and_run
       run: |
+        # Create logs directory
+        mkdir -p logs
+        
         # Use the setup script to build and run the container
         ./setup.sh -b || {
           echo "Error: setup.sh failed with exit code $?"
-          echo "SETUP SCRIPT ERROR" > container_logs.txt
-          echo "Command './setup.sh -b' failed with exit code $?" >> container_logs.txt
-          docker ps -a >> container_logs.txt
-          docker images >> container_logs.txt
-          echo "Docker daemon logs:" >> container_logs.txt
-          sudo journalctl -u docker.service -n 50 >> container_logs.txt 2>&1 || true
+          echo "SETUP SCRIPT ERROR" > logs/container_logs.txt
+          echo "Command './setup.sh -b' failed with exit code $?" >> logs/container_logs.txt
+          docker ps -a >> logs/container_logs.txt
+          docker images >> logs/container_logs.txt
+          echo "Docker daemon logs:" >> logs/container_logs.txt
+          sudo journalctl -u docker.service -n 50 >> logs/container_logs.txt 2>&1 || true
+          echo "FAILED=true" >> $GITHUB_ENV
           exit 1
         }
         
@@ -88,12 +92,13 @@ jobs:
         
         if [ -z "$CONTAINER_NAME" ]; then
           echo "Error: Container not created or not running"
-          echo "CONTAINER NOT FOUND" > container_logs.txt
-          echo "Container was not created or is not running" >> container_logs.txt
-          echo "Docker containers:" >> container_logs.txt
-          docker ps -a >> container_logs.txt
-          echo "Docker images:" >> container_logs.txt
-          docker images >> container_logs.txt
+          echo "CONTAINER NOT FOUND" > logs/container_logs.txt
+          echo "Container was not created or is not running" >> logs/container_logs.txt
+          echo "Docker containers:" >> logs/container_logs.txt
+          docker ps -a >> logs/container_logs.txt
+          echo "Docker images:" >> logs/container_logs.txt
+          docker images >> logs/container_logs.txt
+          echo "FAILED=true" >> $GITHUB_ENV
           exit 1
         fi
         
@@ -139,73 +144,149 @@ jobs:
         docker exec "$CONTAINER_NAME" netstat -tlnp | grep :22 || docker exec "$CONTAINER_NAME" ss -tlnp | grep :22
         
     - name: Test user environment
+      id: test_user_env
       if: steps.build_and_run.outputs.container_name != ''
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
         
+        # Create log directory
+        mkdir -p logs
+        
         # Test user home directory structure
         echo "Checking user home directory:"
-        docker exec "$CONTAINER_NAME" ls -la /home/sheen/
+        docker exec "$CONTAINER_NAME" ls -la /home/sheen/ > logs/home_dir.log 2>&1
+        cat logs/home_dir.log
         
         # Test workspace directory mount
         echo "Testing workspace mount:"
-        docker exec "$CONTAINER_NAME" ls -la /home/sheen/workspace/ || true
+        docker exec "$CONTAINER_NAME" ls -la /home/sheen/workspace/ > logs/workspace_mount.log 2>&1 || echo "Workspace mount issue detected" >> logs/workspace_mount.log
+        cat logs/workspace_mount.log
         
         # Create container info and logs early for debugging
-        echo "Container information:" > container_info.txt
-        docker inspect "$CONTAINER_NAME" >> container_info.txt || echo "Failed to inspect container" >> container_info.txt
-        docker logs "$CONTAINER_NAME" > container_logs.txt 2>&1 || echo "Failed to get container logs" >> container_logs.txt
+        echo "Container information:" > logs/container_info.txt
+        docker inspect "$CONTAINER_NAME" >> logs/container_info.txt 2>&1 || echo "Failed to inspect container" >> logs/container_info.txt
+        docker logs "$CONTAINER_NAME" > logs/container_logs.txt 2>&1 || echo "Failed to get container logs" >> logs/container_logs.txt
         
         # Test ZSH functionality (whether fallback or full version)
         echo "Testing ZSH setup:"
-        docker exec "$CONTAINER_NAME" which zsh || echo "ZSH binary not found"
-        docker exec -u sheen "$CONTAINER_NAME" bash -c 'echo $SHELL' || echo "Failed to check default shell"
-        docker exec -u sheen "$CONTAINER_NAME" zsh -c 'echo "ZSH works"' || echo "ZSH execution failed but continuing"
-        docker exec -u sheen "$CONTAINER_NAME" test -f ~/.zshrc && echo "ZSH config exists" || echo "ZSH config not found"
+        {
+          docker exec "$CONTAINER_NAME" which zsh || echo "ZSH binary not found"
+          docker exec -u sheen "$CONTAINER_NAME" bash -c 'echo $SHELL' || echo "Failed to check default shell"
+          docker exec -u sheen "$CONTAINER_NAME" zsh -c 'echo "ZSH works"' || echo "ZSH execution failed"
+          docker exec -u sheen "$CONTAINER_NAME" test -f ~/.zshrc && echo "ZSH config exists" || echo "ZSH config not found"
+        } > logs/zsh_test.log 2>&1
+        cat logs/zsh_test.log
         
+        # Exit with error if ZSH test fails
+        if ! grep -q "ZSH works" logs/zsh_test.log; then
+          echo "::error::ZSH functionality test failed. See detailed logs for more information."
+          echo "FAILED=true" >> $GITHUB_ENV
+          exit 1
+        fi
+      
     - name: Test installed development tools
-      if: steps.build_and_run.outputs.container_name != ''
+      id: test_dev_tools
+      if: steps.build_and_run.outputs.container_name != '' && success()
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
         
         # Test basic tools
         echo "Testing development tools:"
-        docker exec "$CONTAINER_NAME" which clang || echo "clang not found but will continue"
-        docker exec "$CONTAINER_NAME" which python3 || echo "python3 not found but will continue"
-        docker exec "$CONTAINER_NAME" which git || echo "git not found but will continue"
+        {
+          docker exec "$CONTAINER_NAME" which clang || echo "clang not found but will continue"
+          docker exec "$CONTAINER_NAME" which python3 || echo "python3 not found but will continue"
+          docker exec "$CONTAINER_NAME" which git || echo "git not found but will continue"
+        } > logs/dev_tools.log 2>&1
+        cat logs/dev_tools.log
         
         # Test for conda (may not be installed if network issues during build)
         echo "Testing conda installation:"
-        docker exec -u sheen "$CONTAINER_NAME" bash -c '[ -d "$HOME/miniconda3" ] && echo "Miniconda directory exists" || echo "Miniconda not installed"'
+        docker exec -u sheen "$CONTAINER_NAME" bash -c '[ -d "$HOME/miniconda3" ] && echo "Miniconda directory exists" || echo "Miniconda not installed"' > logs/conda.log 2>&1
+        cat logs/conda.log
         
     - name: Test helper functions and fallback configuration
-      if: steps.build_and_run.outputs.container_name != ''
+      id: test_helpers
+      if: steps.build_and_run.outputs.container_name != '' && success()
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
         
         # Check if zsh helper functions are defined
         echo "Testing helper functions:"
-        docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_omz' || echo "Helper install_omz not defined, but continuing"
-        docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_zsh_plugins' || echo "Helper install_zsh_plugins not defined, but continuing"
+        {
+          docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_omz' || echo "Helper install_omz not defined, but continuing"
+          docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_zsh_plugins' || echo "Helper install_zsh_plugins not defined, but continuing"
+        } > logs/helper_functions.log 2>&1
+        cat logs/helper_functions.log
         
         # Check if Oh My Zsh is installed
         echo "Checking Oh My Zsh installation:"
-        docker exec -u sheen "$CONTAINER_NAME" zsh -c '[ -d "$HOME/.oh-my-zsh" ] && echo "Oh My Zsh installed" || echo "Oh My Zsh not installed (using fallback)"'
+        docker exec -u sheen "$CONTAINER_NAME" zsh -c '[ -d "$HOME/.oh-my-zsh" ] && echo "Oh My Zsh installed" || echo "Oh My Zsh not installed (using fallback)"' > logs/omz.log 2>&1
+        cat logs/omz.log
         
     - name: Run security checks
-      if: steps.build_and_run.outputs.container_name != ''
+      id: security_checks
+      if: steps.build_and_run.outputs.container_name != '' && success()
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
         
         # Check for common security issues
         echo "Running security checks..."
         
-        # Check SSH directory permissions
-        docker exec "$CONTAINER_NAME" stat -c "%a %n" /home/sheen/.ssh/
-        docker exec "$CONTAINER_NAME" stat -c "%a %n" /home/sheen/.ssh/authorized_keys || true
+        {
+          # Check SSH directory permissions
+          echo "SSH directory permissions:"
+          docker exec "$CONTAINER_NAME" stat -c "%a %n" /home/sheen/.ssh/
+          docker exec "$CONTAINER_NAME" stat -c "%a %n" /home/sheen/.ssh/authorized_keys || echo "authorized_keys not found or not accessible"
+          
+          # Check sudo access
+          echo "Sudo access check:"
+          docker exec -u sheen "$CONTAINER_NAME" sudo -l || echo "Sudo verification failed but continuing"
+        } > logs/security.log 2>&1
+        cat logs/security.log
         
-        # Check sudo access
-        docker exec -u sheen "$CONTAINER_NAME" sudo -l || echo "Sudo verification failed but continuing"
+    - name: Collect all logs
+      if: always()
+      run: |
+        # Ensure logs directory exists
+        mkdir -p logs
+        
+        # Combine all logs and add timestamps
+        echo "==== CI SUMMARY ====" > logs/combined.log
+        echo "Date: $(date)" >> logs/combined.log
+        
+        if [[ "${{ job.status }}" == "success" ]]; then
+          echo "CI Status: SUCCESS" >> logs/combined.log
+          echo "All tests passed successfully." >> logs/combined.log
+        else
+          echo "CI Status: FAILED" >> logs/combined.log
+          echo "Detailed failure information:" >> logs/combined.log
+          
+          # Add important container info
+          CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+          if [[ -n "$CONTAINER_NAME" ]]; then
+            echo "Container: $CONTAINER_NAME" >> logs/combined.log
+            docker ps -a --filter "name=$CONTAINER_NAME" --format "{{.ID}} {{.Image}} {{.Status}}" >> logs/combined.log
+            docker inspect "$CONTAINER_NAME" --format "{{.State.Status}}" >> logs/combined.log
+            docker logs "$CONTAINER_NAME" >> logs/combined.log 2>&1 || echo "Failed to get container logs" >> logs/combined.log
+          else
+            echo "Container not created or name not captured" >> logs/combined.log
+          fi
+          
+          # Get step outcome information
+          echo "Step outcomes:" >> logs/combined.log
+          echo "- Build container: ${{ steps.build_and_run.outcome }}" >> logs/combined.log
+          echo "- User environment: ${{ steps.test_user_env.outcome || 'Not run' }}" >> logs/combined.log
+          echo "- Development tools: ${{ steps.test_dev_tools.outcome || 'Not run' }}" >> logs/combined.log
+          echo "- Helper functions: ${{ steps.test_helpers.outcome || 'Not run' }}" >> logs/combined.log
+          echo "- Security checks: ${{ steps.security_checks.outcome || 'Not run' }}" >> logs/combined.log
+        fi
+        
+        # List of any log files
+        echo -e "\nLog files available:" >> logs/combined.log
+        ls -la logs/ >> logs/combined.log 2>&1 || echo "No log files found" >> logs/combined.log
+        
+        # Print summary to console
+        cat logs/combined.log
         
     - name: Export container information
       if: always() && steps.build_and_run.outputs.container_name != ''
@@ -213,29 +294,37 @@ jobs:
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
         
         # Export container info for debugging (append if files already exist)
-        if [ ! -f container_info.txt ]; then
-          echo "Container information:" > container_info.txt
-          docker inspect "$CONTAINER_NAME" >> container_info.txt 2>&1 || echo "Failed to inspect container" >> container_info.txt
+        if [ ! -f logs/container_info.txt ]; then
+          echo "Container information:" > logs/container_info.txt
+          docker inspect "$CONTAINER_NAME" >> logs/container_info.txt 2>&1 || echo "Failed to inspect container" >> logs/container_info.txt
         fi
         
-        if [ ! -f container_logs.txt ]; then
+        if [ ! -f logs/container_logs.txt ]; then
           # Save container logs
-          docker logs "$CONTAINER_NAME" > container_logs.txt 2>&1 || echo "Failed to get container logs" >> container_logs.txt
+          docker logs "$CONTAINER_NAME" > logs/container_logs.txt 2>&1 || echo "Failed to get container logs" >> logs/container_logs.txt
         fi
         
         # Add additional diagnostics
-        echo "Docker info:" >> container_info.txt
-        docker info >> container_info.txt 2>&1 || true
+        echo "Docker info:" >> logs/container_info.txt
+        docker info >> logs/container_info.txt 2>&1 || true
         
-    - name: Upload artifacts on failure
-      if: always()
+    - name: Upload artifacts on failure 
+      if: failure() || env.FAILED == 'true'
       uses: actions/upload-artifact@v4
       with:
         name: debug-info
         path: |
-          container_info.txt
-          container_logs.txt
+          logs/
         retention-days: 7
+        
+    - name: Upload success artifacts
+      if: success() && env.FAILED != 'true'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ci-summary
+        path: |
+          logs/combined.log
+        retention-days: 3
         
     - name: Clean up container using setup.sh
       if: always() && steps.build_and_run.outputs.container_name != ''
