@@ -71,7 +71,16 @@ jobs:
       id: build_and_run
       run: |
         # Use the setup script to build and run the container
-        ./setup.sh -b
+        ./setup.sh -b || {
+          echo "Error: setup.sh failed with exit code $?"
+          echo "SETUP SCRIPT ERROR" > container_logs.txt
+          echo "Command './setup.sh -b' failed with exit code $?" >> container_logs.txt
+          docker ps -a >> container_logs.txt
+          docker images >> container_logs.txt
+          echo "Docker daemon logs:" >> container_logs.txt
+          sudo journalctl -u docker.service -n 50 >> container_logs.txt 2>&1 || true
+          exit 1
+        }
         
         # Capture container name for later steps
         HOST_USER=$(whoami)
@@ -79,6 +88,12 @@ jobs:
         
         if [ -z "$CONTAINER_NAME" ]; then
           echo "Error: Container not created or not running"
+          echo "CONTAINER NOT FOUND" > container_logs.txt
+          echo "Container was not created or is not running" >> container_logs.txt
+          echo "Docker containers:" >> container_logs.txt
+          docker ps -a >> container_logs.txt
+          echo "Docker images:" >> container_logs.txt
+          docker images >> container_logs.txt
           exit 1
         fi
         
@@ -136,10 +151,17 @@ jobs:
         echo "Testing workspace mount:"
         docker exec "$CONTAINER_NAME" ls -la /home/sheen/workspace/ || true
         
+        # Create container info and logs early for debugging
+        echo "Container information:" > container_info.txt
+        docker inspect "$CONTAINER_NAME" >> container_info.txt || echo "Failed to inspect container" >> container_info.txt
+        docker logs "$CONTAINER_NAME" > container_logs.txt 2>&1 || echo "Failed to get container logs" >> container_logs.txt
+        
         # Test ZSH functionality (whether fallback or full version)
         echo "Testing ZSH setup:"
-        docker exec -u sheen "$CONTAINER_NAME" zsh -c 'echo $SHELL'
-        docker exec -u sheen "$CONTAINER_NAME" test -f ~/.zshrc && echo "ZSH config exists"
+        docker exec "$CONTAINER_NAME" which zsh || echo "ZSH binary not found"
+        docker exec -u sheen "$CONTAINER_NAME" bash -c 'echo $SHELL' || echo "Failed to check default shell"
+        docker exec -u sheen "$CONTAINER_NAME" zsh -c 'echo "ZSH works"' || echo "ZSH execution failed but continuing"
+        docker exec -u sheen "$CONTAINER_NAME" test -f ~/.zshrc && echo "ZSH config exists" || echo "ZSH config not found"
         
     - name: Test installed development tools
       if: steps.build_and_run.outputs.container_name != ''
@@ -186,19 +208,27 @@ jobs:
         docker exec -u sheen "$CONTAINER_NAME" sudo -l || echo "Sudo verification failed but continuing"
         
     - name: Export container information
-      if: steps.build_and_run.outputs.container_name != ''
+      if: always() && steps.build_and_run.outputs.container_name != ''
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
         
-        # Export container info for debugging
-        echo "Container information:" > container_info.txt
-        docker inspect "$CONTAINER_NAME" >> container_info.txt
+        # Export container info for debugging (append if files already exist)
+        if [ ! -f container_info.txt ]; then
+          echo "Container information:" > container_info.txt
+          docker inspect "$CONTAINER_NAME" >> container_info.txt 2>&1 || echo "Failed to inspect container" >> container_info.txt
+        fi
         
-        # Save container logs
-        docker logs "$CONTAINER_NAME" > container_logs.txt 2>&1 || true
+        if [ ! -f container_logs.txt ]; then
+          # Save container logs
+          docker logs "$CONTAINER_NAME" > container_logs.txt 2>&1 || echo "Failed to get container logs" >> container_logs.txt
+        fi
+        
+        # Add additional diagnostics
+        echo "Docker info:" >> container_info.txt
+        docker info >> container_info.txt 2>&1 || true
         
     - name: Upload artifacts on failure
-      if: failure()
+      if: always()
       uses: actions/upload-artifact@v4
       with:
         name: debug-info
