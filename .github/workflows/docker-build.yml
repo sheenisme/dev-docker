@@ -40,9 +40,11 @@ jobs:
     - name: Free up disk space
       run: |
         # Remove unnecessary packages to free up space
-        sudo apt-get remove -y '^dotnet-.*'
-        sudo apt-get remove -y '^llvm-.*'
-        sudo apt-get remove -y 'php.*'
+        sudo apt-get remove -y '^dotnet-.*' || true
+        sudo apt-get remove -y '^llvm-.*' || true
+        sudo apt-get remove -y 'php.*' || true
+        sudo apt-get remove -y '^mono-.*' || true
+        sudo apt-get remove -y '^ghc-.*' || true
         sudo apt-get autoremove -y
         sudo apt-get clean
         
@@ -65,16 +67,35 @@ jobs:
     - name: Show configuration
       run: ./setup.sh -c
       
-    - name: Build Docker image and run container
+    - name: Build Docker image and run container using setup.sh
       id: build_and_run
       run: |
-        # Run the setup script to build and run the container
+        # Use the setup script to build and run the container
         ./setup.sh -b
         
         # Capture container name for later steps
-        CONTAINER_NAME=$(docker ps --filter "label=host_user=$(whoami)" --format '{{.Names}}' | head -n1)
+        HOST_USER=$(whoami)
+        CONTAINER_NAME=$(docker ps --filter "label=host_user=$HOST_USER" --format '{{.Names}}' | head -n1)
+        
+        if [ -z "$CONTAINER_NAME" ]; then
+          echo "Error: Container not created or not running"
+          exit 1
+        fi
+        
         echo "container_name=$CONTAINER_NAME" >> $GITHUB_OUTPUT
         echo "Container name: $CONTAINER_NAME"
+        
+    - name: Get container IP using setup.sh
+      id: container_ip
+      run: |
+        # Use setup.sh to query IP
+        ./setup.sh -i
+        
+        # Also capture IP for later steps
+        CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER_NAME")
+        echo "container_ip=$CONTAINER_IP" >> $GITHUB_OUTPUT
+        echo "Container IP: $CONTAINER_IP"
         
     - name: Verify container is running
       if: steps.build_and_run.outputs.container_name != ''
@@ -89,52 +110,67 @@ jobs:
         echo "Container logs:"
         docker logs "$CONTAINER_NAME" || true
         
-    - name: Test container functionality
+    - name: Test container basic functionality
       if: steps.build_and_run.outputs.container_name != ''
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
         
-        # Test basic container functionality
         echo "Testing container functionality..."
         
         # Test if SSH service is running
-        docker exec "$CONTAINER_NAME" systemctl status ssh || docker exec "$CONTAINER_NAME" service ssh status || true
+        docker exec "$CONTAINER_NAME" systemctl status ssh || docker exec "$CONTAINER_NAME" service ssh status || docker exec "$CONTAINER_NAME" ps aux | grep sshd
         
-        # Test user home directory
-        echo "Checking user home directory:"
-        docker exec "$CONTAINER_NAME" ls -la /home/sheen/
+        # Test SSH port is listening
+        docker exec "$CONTAINER_NAME" netstat -tlnp | grep :22 || docker exec "$CONTAINER_NAME" ss -tlnp | grep :22
         
-        # Test installed packages
-        echo "Testing installed packages:"
-        docker exec "$CONTAINER_NAME" which clang || true
-        docker exec "$CONTAINER_NAME" which python3 || true
-        docker exec "$CONTAINER_NAME" which git || true
-        
-        # Test conda installation
-        echo "Testing conda installation:"
-        docker exec -u sheen "$CONTAINER_NAME" bash -c 'source ~/.zshrc && which conda' || true
-        
-        # Test workspace mount
-        echo "Testing workspace mount:"
-        docker exec "$CONTAINER_NAME" ls -la /home/sheen/workspace/ || true
-        
-    - name: Test container IP and SSH connectivity
+    - name: Test user environment
       if: steps.build_and_run.outputs.container_name != ''
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
         
-        # Get container IP
-        ./setup.sh -i || true
+        # Test user home directory structure
+        echo "Checking user home directory:"
+        docker exec "$CONTAINER_NAME" ls -la /home/sheen/
         
-        # Test SSH connectivity (without actually connecting)
-        CONTAINER_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$CONTAINER_NAME")
-        if [ -n "$CONTAINER_IP" ]; then
-          echo "Container IP: $CONTAINER_IP"
-          # Test if SSH port is listening
-          docker exec "$CONTAINER_NAME" netstat -tlnp | grep :22 || true
-        fi
+        # Test workspace directory mount
+        echo "Testing workspace mount:"
+        docker exec "$CONTAINER_NAME" ls -la /home/sheen/workspace/ || true
         
-    - name: Run security and health checks
+        # Test ZSH functionality (whether fallback or full version)
+        echo "Testing ZSH setup:"
+        docker exec -u sheen "$CONTAINER_NAME" zsh -c 'echo $SHELL'
+        docker exec -u sheen "$CONTAINER_NAME" test -f ~/.zshrc && echo "ZSH config exists"
+        
+    - name: Test installed development tools
+      if: steps.build_and_run.outputs.container_name != ''
+      run: |
+        CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        
+        # Test basic tools
+        echo "Testing development tools:"
+        docker exec "$CONTAINER_NAME" which clang || echo "clang not found but will continue"
+        docker exec "$CONTAINER_NAME" which python3 || echo "python3 not found but will continue"
+        docker exec "$CONTAINER_NAME" which git || echo "git not found but will continue"
+        
+        # Test for conda (may not be installed if network issues during build)
+        echo "Testing conda installation:"
+        docker exec -u sheen "$CONTAINER_NAME" bash -c '[ -d "$HOME/miniconda3" ] && echo "Miniconda directory exists" || echo "Miniconda not installed"'
+        
+    - name: Test helper functions and fallback configuration
+      if: steps.build_and_run.outputs.container_name != ''
+      run: |
+        CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        
+        # Check if zsh helper functions are defined
+        echo "Testing helper functions:"
+        docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_omz' || echo "Helper install_omz not defined, but continuing"
+        docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_zsh_plugins' || echo "Helper install_zsh_plugins not defined, but continuing"
+        
+        # Check if Oh My Zsh is installed
+        echo "Checking Oh My Zsh installation:"
+        docker exec -u sheen "$CONTAINER_NAME" zsh -c '[ -d "$HOME/.oh-my-zsh" ] && echo "Oh My Zsh installed" || echo "Oh My Zsh not installed (using fallback)"'
+        
+    - name: Run security checks
       if: steps.build_and_run.outputs.container_name != ''
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
@@ -142,15 +178,12 @@ jobs:
         # Check for common security issues
         echo "Running security checks..."
         
-        # Check if user has proper sudo access
-        docker exec -u sheen "$CONTAINER_NAME" sudo -l || true
+        # Check SSH directory permissions
+        docker exec "$CONTAINER_NAME" stat -c "%a %n" /home/sheen/.ssh/
+        docker exec "$CONTAINER_NAME" stat -c "%a %n" /home/sheen/.ssh/authorized_keys || true
         
-        # Check file permissions
-        docker exec "$CONTAINER_NAME" ls -la /home/sheen/.ssh/ || true
-        
-        # Check system resources
-        docker exec "$CONTAINER_NAME" free -h || true
-        docker exec "$CONTAINER_NAME" df -h || true
+        # Check sudo access
+        docker exec -u sheen "$CONTAINER_NAME" sudo -l || echo "Sudo verification failed but continuing"
         
     - name: Export container information
       if: steps.build_and_run.outputs.container_name != ''
@@ -174,18 +207,18 @@ jobs:
           container_logs.txt
         retention-days: 7
         
-    - name: Clean up container
+    - name: Clean up container using setup.sh
       if: always() && steps.build_and_run.outputs.container_name != ''
       run: |
+        echo "Cleaning up container with setup.sh"
+        ./setup.sh -s
+        
+        # Verify cleanup
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
-        echo "Cleaning up container: $CONTAINER_NAME"
-        
-        # Stop and remove container
-        docker rm -f "$CONTAINER_NAME" || true
-        
-        # Optional: Remove image to save space (comment out if you want to keep it)
-        # IMAGE_NAME="dev_image_$(whoami)"
-        # docker rmi "$IMAGE_NAME" || true
+        if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+          echo "Warning: Container wasn't removed by setup.sh, removing manually"
+          docker rm -f "$CONTAINER_NAME" || true
+        fi
         
     - name: Show final disk usage
       if: always()

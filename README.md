@@ -12,7 +12,7 @@ This repository provides a highly customizable Docker-based development environm
 
 # 🐳 Development Docker Environment
 
-A customized Docker development environment with pre-installed development tools.
+A customized Docker development environment with pre-installed development tools, designed to be resilient and easy to set up.
 
 ---
 
@@ -64,7 +64,7 @@ You can use the following options with `setup.sh`:
 > **Default container password is `123456`.**  
 > You can customize the container username, password, image name, and container name by editing the variables at the top of `setup.sh` before building/running the container.
 
-> **SSH Access via Jump Host:**
+> **SSH Access via Jump Host (Bastion Host):**
 >
 > If your development host is behind a jump host, you can connect to the Docker container in two steps:
 >
@@ -86,7 +86,7 @@ You can use the following options with `setup.sh`:
 >     Port 22
 > ```
 >
-> - Replace `<container_ip>` with the IP address of your Docker container (see "SSH Connection" section above).
+> - Replace `<container_ip>` with the IP address of your Docker container (see "SSH Connection" section below).
 > - Replace `<jump_host_ip>` and `<your_jump_host_user>` with your jump host's IP and username.
 > - After saving, you can connect to the container from your local machine with:
 >
@@ -137,10 +137,11 @@ docker rm -f $container_name
 ### SSH Connection
 
 ```shell
-# Get container IP address
-container_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container_name)
+# Get container IP address (using setup script)
+./setup.sh -i
 
-# Display container IP for SSH connection
+# Manual method to get container IP
+container_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container_name)
 echo "Container IP: $container_ip"
 echo "SSH command: ssh $container_user_name@$container_ip"
 ```
@@ -174,6 +175,38 @@ cd scripts
 
 ---
 
+## 🧩 ZSH and Development Tools
+
+The container comes with ZSH shell configured with Oh My Zsh, but is designed to work even if installation fails:
+
+### ZSH Features
+
+- **Oh My Zsh:** Pre-installed with useful plugins (if installation succeeds)
+- **Fallback Configuration:** Basic ZSH setup works even if Oh My Zsh installation fails
+- **Helper Functions:** If Oh My Zsh isn't installed, you can install it manually
+
+### Helper Commands
+
+If Oh My Zsh didn't install (you'll see a message when you log in), you can use these commands:
+
+```shell
+# Install Oh My Zsh manually
+install_omz
+
+# Install ZSH plugins (after Oh My Zsh is installed)
+install_zsh_plugins
+```
+
+### Development Tools
+
+The container includes:
+- LLVM/Clang (version 18)
+- Python 3 with pip
+- Git and common development tools
+- Miniconda (automatically added to PATH)
+
+---
+
 ## 🧩 Troubleshooting
 
 ### Common Issues
@@ -185,15 +218,21 @@ cd scripts
 2. **Network connectivity issues**
    - If the container can't access the internet, try setting HTTP/HTTPS proxies
    - Use the proxy helper script or set environment variables
+   - Oh My Zsh and plugins may not install if there's no internet connection, but the container will still work
 
 3. **Container startup failures**
    - Check container logs: `docker logs $container_name`
-   - Verify GPU support is available: `docker info | grep -i runtime`
+   - Verify GPU support if attempting to use it: `docker info | grep -i runtime`
 
 4. **SSH permission issues**
    - If you encounter permission problems after SSH login:
      1. First login to the container via terminal: `docker exec -it $container_name zsh`
-     2. Then use sudo to modify home directory permissions: `sudo chmod -R 777 /home/$container_user_name`
+     2. Then use sudo to modify home directory permissions: `sudo chmod -R 700 /home/$container_user_name/.ssh`
+
+5. **ZSH configuration issues**
+   - If Oh My Zsh didn't install properly, use the `install_omz` helper function
+   - If plugins aren't working, use the `install_zsh_plugins` function
+   - Make sure to restart your shell after installing plugins
 
 ---
 
@@ -207,10 +246,12 @@ cd scripts
 ## 📚 Reference Links
 - [Docker Documentation](https://docs.docker.com/)
 - [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)
+- [Oh My Zsh](https://ohmyz.sh/)
 - [Reference Repository](https://github.com/zhiqiangzz/docker-dev.git)
 
 ---
 
 ## 📝 Changelog
 
-- **2025-05-29**: Initial release.
+- **2025-05-30**: (V0.1.1) Fixed workspace mounting and added resilient ZSH configuration.
+- **2025-05-29**: (V0.1.0) Initial release.

@@ -12,7 +12,7 @@ This repository provides a highly customizable Docker-based development environm
 
 # 🐳 开发用 Docker 环境
 
-一个定制化的 Docker 开发环境，预装了常用开发工具。
+一个定制化的 Docker 开发环境，预装了常用开发工具，设计为易于设置且具有高可靠性。
 
 ---
 
@@ -86,7 +86,7 @@ chmod +x setup.sh
 >     Port 22
 > ```
 >
-> - `<container_ip>` 替换为你的 Docker 容器 IP（见上文“SSH 连接”部分获取）。
+> - `<container_ip>` 替换为你的 Docker 容器 IP（见下方"SSH 连接"部分获取）。
 > - `<jump_host_ip>` 和 `<your_jump_host_user>` 替换为跳板机的 IP 和用户名。
 > - 保存后，你可以直接在本地终端输入：
 >
@@ -103,7 +103,7 @@ chmod +x setup.sh
 ## 🏗️ 容器细节
 
 - **默认容器用户：** `sheen`
-- **默认密码：** `sheen123456`
+- **默认密码：** `123456`
 - **工作区挂载：** 宿主机 `~/workspace/dev_container_sheen` 挂载到容器 `/home/sheen/workspace`
 - **SSH 支持：** 容器暴露 22 端口，可通过 SSH 访问
 - **GPU 支持：** 如检测到 NVIDIA runtime 自动启用 GPU
@@ -137,12 +137,13 @@ docker rm -f $container_name
 ### SSH 连接
 
 ```shell
-# 获取容器 IP 地址
-container_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container_name)
+# 使用脚本获取容器 IP 地址
+./setup.sh -i
 
-# 显示 SSH 连接命令
-echo "Container IP: $container_ip"
-echo "SSH command: ssh $container_user_name@$container_ip"
+# 手动方式获取容器 IP
+container_ip=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $container_name)
+echo "容器 IP: $container_ip"
+echo "SSH 连接命令: ssh $container_user_name@$container_ip"
 ```
 
 ### 文件传输
@@ -174,6 +175,38 @@ cd scripts
 
 ---
 
+## 🧩 ZSH 和开发工具
+
+容器预装了 ZSH 外壳并配置了 Oh My Zsh，但即使安装失败也能正常使用：
+
+### ZSH 特性
+
+- **Oh My Zsh:** 预装了常用插件（如安装成功）
+- **备选配置:** 即使 Oh My Zsh 安装失败，基本 ZSH 设置也能工作
+- **助手函数:** 如果 Oh My Zsh 未安装，可以手动安装
+
+### 助手命令
+
+如果 Oh My Zsh 未安装（登录时会看到提示信息），你可以使用以下命令：
+
+```shell
+# 手动安装 Oh My Zsh
+install_omz
+
+# 安装 ZSH 插件（在 Oh My Zsh 安装完成后）
+install_zsh_plugins
+```
+
+### 开发工具
+
+容器包含：
+- LLVM/Clang（版本 18）
+- Python 3 及 pip
+- Git 和常用开发工具
+- Miniconda（自动添加到 PATH）
+
+---
+
 ## 🧩 常见问题排查
 
 ### 常见问题
@@ -184,16 +217,22 @@ cd scripts
 
 2. **网络连接问题**
    - 容器无法联网时，请尝试设置 HTTP/HTTPS 代理
-   - 可用代理脚本或直接设置环境变量
+   - 使用代理脚本或直接设置环境变量
+   - 如果网络连接有问题，Oh My Zsh 和插件可能无法安装，但容器仍可正常工作
 
 3. **容器启动失败**
    - 查看容器日志：`docker logs $container_name`
-   - 检查 GPU 支持：`docker info | grep -i runtime`
+   - 如尝试使用 GPU，请检查 GPU 支持：`docker info | grep -i runtime`
 
 4. **SSH 权限问题**
    - SSH 登录后如遇权限问题：
      1. 先通过终端进入容器：`docker exec -it $container_name zsh`
-     2. 用 sudo 修改 home 目录权限：`sudo chmod -R 777 /home/$container_user_name`
+     2. 使用 sudo 修改 SSH 目录权限：`sudo chmod -R 700 /home/$container_user_name/.ssh`
+
+5. **ZSH 配置问题**
+   - 如 Oh My Zsh 未正确安装，使用 `install_omz` 助手函数
+   - 如插件不工作，使用 `install_zsh_plugins` 函数
+   - 安装插件后记得重启 shell
 
 ---
 
@@ -207,10 +246,12 @@ cd scripts
 ## 📚 参考链接
 - [Docker 官方文档](https://docs.docker.com/)
 - [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-docker)
+- [Oh My Zsh](https://ohmyz.sh/)
 - [参考仓库](https://github.com/zhiqiangzz/docker-dev.git)
 
 ---
 
 ## 📝 更新日志
 
-- **2025-05-29**：首次发布。
+- **2025-05-30**：(V0.1.1) 修复工作区挂载问题并增强 ZSH 配置的可靠性。
+- **2025-05-29**：(V0.1.0) 首次发布。
