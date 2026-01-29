@@ -7,6 +7,19 @@
 # Exit on any error
 set -e
 
+# Operating System Configuration
+declare -A OS_CONFIGS=(
+    ["ubuntu2004"]="ubuntu:20.04 ubuntu 20.04 focal"
+    ["ubuntu2204"]="ubuntu:22.04 ubuntu 22.04 jammy"
+    ["ubuntu2404"]="ubuntu:24.04 ubuntu 24.04 noble"
+    ["centos7"]="centos:7 centos 7 centos7"
+    ["centos8"]="quay.io/centos/centos:stream8 centos 8 stream8"
+)
+
+# Default configuration
+os_version="ubuntu2204"    # Default OS version
+build_mode="full"          # Default build mode: minimal or full
+
 # Auto-detect configuration variables
 host_user_name=$(whoami)                          # Auto-detect current user
 host_user_id=$(id -u)                             # Get current user ID
@@ -15,9 +28,7 @@ host_home_dir=$(eval echo ~$host_user_name)       # Get home directory
 workspace_dir="$host_home_dir/workspace"          # Workspace directory
 
 # Derived configuration
-image_name="dev_image_${host_user_name}"               # Image name based on host user
 container_user_name="sheen"                            # Container user name
-container_name="dev_container_${container_user_name}"  # Container name based on host user
 container_passwd="123456"                              # Container user password
 
 # Network and proxy configuration (set if needed)
@@ -46,24 +57,56 @@ error() {
 
 # Function to display usage information
 show_usage() {
-    echo "Usage: $0 [OPTION]"
+    echo "Usage: $0 [OPTIONS]"
+    echo ""
     echo "Options:"
-    echo "  -b    Build image, run container, and query IP"
-    echo "  -r    Run container and query IP (skip build)"
-    echo "  -i    Query and print container IP only"
-    echo "  -s    Stop and remove container"
-    echo "  -c    Show current configuration"
-    echo "  -h    Display this help message"
-    echo "  No option will execute all operations (default)"
+    echo "  -o OS_VERSION    Specify OS version (default: ubuntu2204)"
+    echo "                   Supported: ubuntu2004, ubuntu2204, ubuntu2404, centos7, centos8"
+    echo "  -m MODE          Build mode: minimal or full (default: full)"
+    echo "  -b               Build image, run container, and query IP"
+    echo "  -r               Run container and query IP (skip build)"
+    echo "  -i               Query and print container IP only"
+    echo "  -s               Stop and remove container"
+    echo "  -c               Show current configuration"
+    echo "  -l               List available OS versions"
+    echo "  -h               Display this help message"
+    echo ""
+    echo "No action option will execute all operations (default)"
     echo ""
     echo "Environment variables:"
-    echo "  HTTP_PROXY   - HTTP proxy URL (optional)"
-    echo "  HTTPS_PROXY  - HTTPS proxy URL (optional)"
+    echo "  HTTP_PROXY       HTTP proxy URL (optional)"
+    echo "  HTTPS_PROXY      HTTPS proxy URL (optional)"
+    echo ""
+    echo "Examples:"
+    echo "  $0 -o ubuntu2004 -m minimal -b    # Build Ubuntu 20.04 minimal image"
+    echo "  $0 -o centos8 -m full              # Build CentOS 8 full image"
+    echo "  $0 -l                              # List available OS versions"
+}
+
+# Function to list available OS versions
+list_os_versions() {
+    echo "Available OS versions:"
+    echo "  - ubuntu2004: Ubuntu 20.04 (Focal)"
+    echo "  - ubuntu2204: Ubuntu 22.04 (Jammy)"
+    echo "  - ubuntu2404: Ubuntu 24.04 (Noble)"
+    echo "  - centos7:    CentOS 7"
+    echo "  - centos8:    CentOS Stream 8"
 }
 
 # Function to show current configuration
 show_config() {
+    # Parse OS configuration
+    local os_config="${OS_CONFIGS[$os_version]}"
+    read -r base_image distro_name distro_version distro_codename <<< "$os_config"
+    
+    # Generate names based on configuration
+    image_name="dev_${os_version}_${build_mode}_${host_user_name}"
+    container_name="dev_${os_version}_${build_mode}_${container_user_name}"
+    
     log "Current Configuration:"
+    echo "  OS version: $os_version"
+    echo "  Base image: $base_image"
+    echo "  Build mode: $build_mode"
     echo "  Host user: $host_user_name (UID: $host_user_id, GID: $host_group_id)"
     echo "  Host home: $host_home_dir"
     echo "  Workspace: $workspace_dir"
@@ -111,10 +154,30 @@ ensure_workspace() {
 
 # Function to build Docker image
 build_image() {
+    # Parse OS configuration
+    local os_config="${OS_CONFIGS[$os_version]}"
+    if [ -z "$os_config" ]; then
+        error "Invalid OS version: $os_version"
+        error "Use -l to list available OS versions"
+        exit 1
+    fi
+    
+    read -r base_image distro_name distro_version distro_codename <<< "$os_config"
+    
+    # Generate image name
+    image_name="dev_${os_version}_${build_mode}_${host_user_name}"
+    
     log "Building Docker image: $image_name"
+    log "Base image: $base_image"
+    log "Build mode: $build_mode"
 
     # Build arguments
     build_args=(
+        --build-arg "BASE_IMAGE=${base_image}"
+        --build-arg "DISTRO_NAME=${distro_name}"
+        --build-arg "DISTRO_VERSION=${distro_version}"
+        --build-arg "DISTRO_CODENAME=${distro_codename}"
+        --build-arg "BUILD_MODE=${build_mode}"
         --build-arg "USER_NAME=${container_user_name}"
         --build-arg "USER_PASSWD=${container_passwd}" 
         --build-arg "HOST_USER_ID=${host_user_id}"
@@ -142,6 +205,10 @@ build_image() {
 
 # Function to run Docker container
 run_container() {
+    # Generate container name based on configuration
+    image_name="dev_${os_version}_${build_mode}_${host_user_name}"
+    container_name="dev_${os_version}_${build_mode}_${container_user_name}"
+    
     # Check if container with the same name already exists
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
         warn "Container '$container_name' already exists."
@@ -179,6 +246,8 @@ run_container() {
         -e "HOST_PERMS=$host_user_id:$host_group_id"
         --label "user=$container_user_name"
         --label "host_user=$host_user_name"
+        --label "os_version=$os_version"
+        --label "build_mode=$build_mode"
         -v "$container_workspace_dir:/home/$container_user_name/workspace"
     )
 
@@ -198,11 +267,14 @@ run_container() {
 
     # Display container information
     log "Container information:"
-    docker ps --filter "label=host_user=$host_user_name" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+    docker ps --filter "name=$container_name" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 }
 
 # Function to query and display container IP
 query_ip() {
+    # Generate container name based on configuration
+    container_name="dev_${os_version}_${build_mode}_${container_user_name}"
+    
     # Check if container exists and is running
     if ! docker ps --format '{{.Names}}' | grep -q "^${container_name}$"; then
         error "Container '$container_name' is not running"
@@ -225,6 +297,9 @@ query_ip() {
 
 # Function to stop and remove container
 stop_container() {
+    # Generate container name based on configuration
+    container_name="dev_${os_version}_${build_mode}_${container_user_name}"
+    
     if docker ps -a --format '{{.Names}}' | grep -q "^${container_name}$"; then
         log "Stopping and removing container: $container_name"
         docker rm -f "$container_name"
@@ -236,8 +311,23 @@ stop_container() {
 
 # Parse command line options
 mode="all"
-while getopts "bricsh" opt; do
+while getopts "o:m:bricslh" opt; do
     case ${opt} in
+        o )
+            os_version="$OPTARG"
+            if [ -z "${OS_CONFIGS[$os_version]}" ]; then
+                error "Invalid OS version: $os_version"
+                error "Use -l to list available OS versions"
+                exit 1
+            fi
+            ;;
+        m )
+            build_mode="$OPTARG"
+            if [ "$build_mode" != "minimal" ] && [ "$build_mode" != "full" ]; then
+                error "Invalid build mode: $build_mode (must be 'minimal' or 'full')"
+                exit 1
+            fi
+            ;;
         b )
             mode="build"
             ;;
@@ -252,6 +342,10 @@ while getopts "bricsh" opt; do
             ;;
         c )
             mode="config"
+            ;;
+        l )
+            list_os_versions
+            exit 0
             ;;
         h )
             show_usage

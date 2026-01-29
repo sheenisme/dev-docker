@@ -14,6 +14,11 @@ This repository provides a highly customizable Docker-based development environm
 
 A customized Docker development environment with pre-installed development tools, designed to be resilient and easy to set up.
 
+**📚 Documentation:**
+- [Quick Start Guide](docs/QUICKSTART.md) - Get started in 3 steps
+- [Configuration Examples](docs/EXAMPLES.md) - Detailed configuration examples
+- [中文文档](README.zh-CN.md) - Chinese documentation
+
 ---
 
 ## 📦 Prerequisites
@@ -31,9 +36,41 @@ The easiest way to set up the environment is to use the provided setup script:
 # Make the script executable
 chmod +x setup.sh
 
-# Run the setup script (default: build image, run container, show IP)
+# Run the setup script with default settings (Ubuntu 22.04, full mode)
 ./setup.sh
+
+# Or specify OS version and build mode
+./setup.sh -o ubuntu2404 -m full       # Ubuntu 24.04, full mode
+./setup.sh -o ubuntu2004 -m minimal    # Ubuntu 20.04, minimal mode
+./setup.sh -o centos8 -m full          # CentOS Stream 8, full mode
 ```
+
+### Build Modes
+
+The project supports two build modes:
+
+- **full** (default): Includes all development tools
+  - LLVM/Clang toolchain (version 18)
+  - ZSH with Oh My Zsh and plugins
+  - Miniconda Python distribution
+  - Complete development environment
+
+- **minimal**: Lightweight installation
+  - Essential tools only (gcc, git, vim, etc.)
+  - Bash shell (no ZSH)
+  - No LLVM/Clang
+  - No Miniconda
+  - Faster build time and smaller image size
+
+### Supported OS Versions
+
+| OS Version | Base Image | Description |
+|------------|------------|-------------|
+| `ubuntu2004` | Ubuntu 20.04 | Focal Fossa (LTS) |
+| `ubuntu2204` | Ubuntu 22.04 | Jammy Jellyfish (LTS) - **Default** |
+| `ubuntu2404` | Ubuntu 24.04 | Noble Numbat (LTS) |
+| `centos7` | CentOS 7 | CentOS 7 |
+| `centos8` | CentOS Stream 8 | CentOS Stream 8 |
 
 ### Script Options
 
@@ -41,18 +78,33 @@ You can use the following options with `setup.sh`:
 
 | Option | Description                                 |
 |--------|---------------------------------------------|
+| `-o OS_VERSION` | Specify OS version (see table above) |
+| `-m MODE` | Build mode: `minimal` or `full` (default: full) |
 | `-b`   | Build image, run container, and show IP     |
 | `-r`   | Run container and show IP (skip build)      |
 | `-i`   | Show container IP only                      |
 | `-s`   | Stop and remove the container               |
 | `-c`   | Show current configuration                  |
+| `-l`   | List available OS versions                  |
 | `-h`   | Display help message                        |
 
 **Example:**
 
 ```shell
-./setup.sh -b   # Build and run
-./setup.sh -s   # Stop and remove container
+# List available OS versions
+./setup.sh -l
+
+# Build Ubuntu 24.04 with full mode (default)
+./setup.sh -o ubuntu2404 -b
+
+# Build CentOS 8 with minimal mode
+./setup.sh -o centos8 -m minimal -b
+
+# Build and run with default settings
+./setup.sh
+
+# Stop and remove container
+./setup.sh -s
 ```
 
 ### Environment Variables
@@ -104,9 +156,14 @@ You can use the following options with `setup.sh`:
 
 - **Default container user:** `sheen`
 - **Default password:** `123456`
-- **Workspace mount:** Host's `~/workspace/dev_container_sheen` is mounted to `/home/sheen/workspace` in the container.
-- **SSH enabled:** Port 22 is exposed for SSH access.
-- **GPU support:** Automatically enabled if NVIDIA runtime is available.
+- **Workspace mount:** Host's `~/workspace/dev_<os_version>_<mode>_<username>` is mounted to `/home/sheen/workspace` in the container
+  - Example: `~/workspace/dev_ubuntu2204_full_sheen` for Ubuntu 22.04 in full mode
+- **Container naming:** Containers are named based on OS version and build mode
+  - Format: `dev_<os_version>_<mode>_<username>`
+  - Example: `dev_ubuntu2204_full_sheen`
+- **SSH enabled:** Port 22 is exposed for SSH access
+- **GPU support:** Automatically enabled if NVIDIA runtime is available
+- **Shell:** ZSH (full mode) or Bash (minimal mode)
 
 ---
 
@@ -177,15 +234,33 @@ cd scripts
 
 ## 🧩 ZSH and Development Tools
 
-The container comes with ZSH shell configured with Oh My Zsh, but is designed to work even if installation fails:
+### Build Mode Comparison
 
-### ZSH Features
+| Feature | Full Mode | Minimal Mode |
+|---------|-----------|--------------|
+| Shell | ZSH with Oh My Zsh | Bash |
+| LLVM/Clang | ✅ Version 18 | ❌ |
+| Python Distribution | Miniconda | System Python 3 |
+| Development Tools | Complete set | Essential only (gcc, git, cmake) |
+| Image Size | Larger (~2-3GB) | Smaller (~800MB-1GB) |
+| Build Time | Longer (~10-15 min) | Faster (~5-8 min) |
 
+### Full Mode Features
+
+The full mode container includes:
+
+#### ZSH Configuration
 - **Oh My Zsh:** Pre-installed with useful plugins (if installation succeeds)
 - **Fallback Configuration:** Basic ZSH setup works even if Oh My Zsh installation fails
-- **Helper Functions:** If Oh My Zsh isn't installed, you can install it manually
+- **Helper Functions:** Manual installation commands available
 
-### Helper Commands
+#### Development Tools
+- **LLVM/Clang:** Complete toolchain (version 18) with clangd, lld, lldb
+- **Python:** Miniconda distribution with conda package manager
+- **Build Tools:** gcc, cmake, ninja, make, autotools
+- **Additional Tools:** ripgrep, tmux, jq, and more
+
+### Helper Commands (Full Mode Only)
 
 If Oh My Zsh didn't install (you'll see a message when you log in), you can use these commands:
 
@@ -197,13 +272,19 @@ install_omz
 install_zsh_plugins
 ```
 
-### Development Tools
+### Minimal Mode Features
 
-The container includes:
-- LLVM/Clang (version 18)
-- Python 3 with pip
-- Git and common development tools
-- Miniconda (automatically added to PATH)
+The minimal mode is designed for:
+- Quick development environments
+- CI/CD pipelines
+- Resource-constrained environments
+- Basic compilation and testing tasks
+
+Includes:
+- Essential build tools (gcc, make, cmake)
+- Version control (git)
+- Text editors (vim)
+- Basic utilities (curl, wget, ssh)
 
 ---
 
@@ -253,5 +334,10 @@ The container includes:
 
 ## 📝 Changelog
 
-- **2025-05-30**: (V0.1.1) Fixed workspace mounting and added resilient ZSH configuration.
-- **2025-05-29**: (V0.1.0) Initial release.
+- **2026-01-29**: (V0.2.0) Added multi-OS support and build modes
+  - Support for Ubuntu 20.04, 22.04, 24.04
+  - Support for CentOS 7, Stream 8
+  - Two build modes: minimal and full
+  - Flexible configuration via command-line options
+- **2025-05-30**: (V0.1.1) Fixed workspace mounting and added resilient ZSH configuration
+- **2025-05-29**: (V0.1.0) Initial release

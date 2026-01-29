@@ -20,9 +20,40 @@ jobs:
     runs-on: ubuntu-latest
     
     strategy:
+      fail-fast: false
       matrix:
-        # Test with different Ubuntu versions if needed
-        ubuntu-version: [latest]
+        include:
+          # Ubuntu 20.04 - Minimal mode
+          - os_version: ubuntu2004
+            build_mode: minimal
+            display_name: "Ubuntu 20.04 (Minimal)"
+          
+          # Ubuntu 20.04 - Full mode
+          - os_version: ubuntu2004
+            build_mode: full
+            display_name: "Ubuntu 20.04 (Full)"
+          
+          # Ubuntu 22.04 - Minimal mode
+          - os_version: ubuntu2204
+            build_mode: minimal
+            display_name: "Ubuntu 22.04 (Minimal)"
+          
+          # Ubuntu 22.04 - Full mode
+          - os_version: ubuntu2204
+            build_mode: full
+            display_name: "Ubuntu 22.04 (Full)"
+          
+          # CentOS 7 - Minimal mode
+          - os_version: centos7
+            build_mode: minimal
+            display_name: "CentOS 7 (Minimal)"
+          
+          # CentOS 7 - Full mode
+          - os_version: centos7
+            build_mode: full
+            display_name: "CentOS 7 (Full)"
+    
+    name: Build & Test - ${{ matrix.display_name }}
     
     steps:
     - name: Checkout repository
@@ -65,7 +96,7 @@ jobs:
       run: chmod +x ./setup.sh
       
     - name: Show configuration
-      run: ./setup.sh -c
+      run: ./setup.sh -o ${{ matrix.os_version }} -m ${{ matrix.build_mode }} -c
       
     - name: Build Docker image and run container using setup.sh
       id: build_and_run
@@ -74,10 +105,10 @@ jobs:
         mkdir -p logs
         
         # Use the setup script to build and run the container
-        ./setup.sh -b || {
+        ./setup.sh -o ${{ matrix.os_version }} -m ${{ matrix.build_mode }} -b || {
           echo "Error: setup.sh failed with exit code $?"
           echo "SETUP SCRIPT ERROR" > logs/container_logs.txt
-          echo "Command './setup.sh -b' failed with exit code $?" >> logs/container_logs.txt
+          echo "Command './setup.sh -o ${{ matrix.os_version }} -m ${{ matrix.build_mode }} -b' failed with exit code $?" >> logs/container_logs.txt
           docker ps -a >> logs/container_logs.txt
           docker images >> logs/container_logs.txt
           echo "Docker daemon logs:" >> logs/container_logs.txt
@@ -88,7 +119,8 @@ jobs:
         
         # Capture container name for later steps
         HOST_USER=$(whoami)
-        CONTAINER_NAME=$(docker ps --filter "label=host_user=$HOST_USER" --format '{{.Names}}' | head -n1)
+        CONTAINER_USER="sheen"
+        CONTAINER_NAME="dev_${{ matrix.os_version }}_${{ matrix.build_mode }}_${CONTAINER_USER}"
         
         if [ -z "$CONTAINER_NAME" ]; then
           echo "Error: Container not created or not running"
@@ -109,7 +141,7 @@ jobs:
       id: container_ip
       run: |
         # Use setup.sh to query IP
-        ./setup.sh -i
+        ./setup.sh -o ${{ matrix.os_version }} -m ${{ matrix.build_mode }} -i
         
         # Also capture IP for later steps
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
@@ -148,6 +180,7 @@ jobs:
       if: steps.build_and_run.outputs.container_name != ''
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        BUILD_MODE="${{ matrix.build_mode }}"
         
         # Create log directory
         mkdir -p logs
@@ -167,21 +200,38 @@ jobs:
         docker inspect "$CONTAINER_NAME" >> logs/container_info.txt 2>&1 || echo "Failed to inspect container" >> logs/container_info.txt
         docker logs "$CONTAINER_NAME" > logs/container_logs.txt 2>&1 || echo "Failed to get container logs" >> logs/container_logs.txt
         
-        # Test ZSH functionality (whether fallback or full version)
-        echo "Testing ZSH setup:"
-        {
-          docker exec "$CONTAINER_NAME" which zsh || echo "ZSH binary not found"
-          docker exec -u sheen "$CONTAINER_NAME" bash -c 'echo $SHELL' || echo "Failed to check default shell"
-          docker exec -u sheen "$CONTAINER_NAME" zsh -c 'echo "ZSH works"' || echo "ZSH execution failed"
-          docker exec -u sheen "$CONTAINER_NAME" test -f ~/.zshrc && echo "ZSH config exists" || echo "ZSH config not found"
-        } > logs/zsh_test.log 2>&1
-        cat logs/zsh_test.log
-        
-        # Exit with error if ZSH test fails
-        if ! grep -q "ZSH works" logs/zsh_test.log; then
-          echo "::error::ZSH functionality test failed. See detailed logs for more information."
-          echo "FAILED=true" >> $GITHUB_ENV
-          exit 1
+        # Test shell based on build mode
+        if [ "$BUILD_MODE" = "full" ]; then
+          echo "Testing ZSH setup (full mode):"
+          {
+            docker exec "$CONTAINER_NAME" which zsh || echo "ZSH binary not found"
+            docker exec -u sheen "$CONTAINER_NAME" bash -c 'echo $SHELL' || echo "Failed to check default shell"
+            docker exec -u sheen "$CONTAINER_NAME" zsh -c 'echo "ZSH works"' || echo "ZSH execution failed"
+            docker exec -u sheen "$CONTAINER_NAME" test -f ~/.zshrc && echo "ZSH config exists" || echo "ZSH config not found"
+          } > logs/shell_test.log 2>&1
+          cat logs/shell_test.log
+          
+          # Exit with error if ZSH test fails in full mode
+          if ! grep -q "ZSH works" logs/shell_test.log; then
+            echo "::error::ZSH functionality test failed in full mode. See detailed logs for more information."
+            echo "FAILED=true" >> $GITHUB_ENV
+            exit 1
+          fi
+        else
+          echo "Testing Bash setup (minimal mode):"
+          {
+            docker exec "$CONTAINER_NAME" which bash || echo "Bash binary not found"
+            docker exec -u sheen "$CONTAINER_NAME" bash -c 'echo "Bash works"' || echo "Bash execution failed"
+            docker exec "$CONTAINER_NAME" which zsh && echo "WARNING: ZSH found in minimal mode" || echo "ZSH correctly not installed"
+          } > logs/shell_test.log 2>&1
+          cat logs/shell_test.log
+          
+          # Exit with error if Bash test fails in minimal mode
+          if ! grep -q "Bash works" logs/shell_test.log; then
+            echo "::error::Bash functionality test failed in minimal mode. See detailed logs for more information."
+            echo "FAILED=true" >> $GITHUB_ENV
+            exit 1
+          fi
         fi
       
     - name: Test installed development tools
@@ -189,19 +239,42 @@ jobs:
       if: steps.build_and_run.outputs.container_name != '' && success()
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        BUILD_MODE="${{ matrix.build_mode }}"
         
-        # Test basic tools
+        # Test basic tools (available in all modes)
         echo "Testing development tools:"
         {
-          docker exec "$CONTAINER_NAME" which clang || echo "clang not found but will continue"
-          docker exec "$CONTAINER_NAME" which python3 || echo "python3 not found but will continue"
-          docker exec "$CONTAINER_NAME" which git || echo "git not found but will continue"
+          docker exec "$CONTAINER_NAME" which gcc || echo "gcc not found"
+          docker exec "$CONTAINER_NAME" which python3 || echo "python3 not found"
+          docker exec "$CONTAINER_NAME" which git || echo "git not found"
+          docker exec "$CONTAINER_NAME" which cmake || echo "cmake not found"
         } > logs/dev_tools.log 2>&1
         cat logs/dev_tools.log
         
-        # Test for conda (may not be installed if network issues during build)
-        echo "Testing conda installation:"
-        docker exec -u sheen "$CONTAINER_NAME" bash -c '[ -d "$HOME/miniconda3" ] && echo "Miniconda directory exists" || echo "Miniconda not installed"' > logs/conda.log 2>&1
+        # Test for LLVM/Clang (only in full mode)
+        if [ "$BUILD_MODE" = "full" ]; then
+          echo "Testing LLVM/Clang installation (full mode):"
+          {
+            docker exec "$CONTAINER_NAME" which clang || echo "clang not found in full mode"
+            docker exec "$CONTAINER_NAME" clang --version || echo "clang version check failed"
+          } > logs/llvm.log 2>&1
+          cat logs/llvm.log
+        else
+          echo "Testing LLVM/Clang absence (minimal mode):"
+          {
+            docker exec "$CONTAINER_NAME" which clang && echo "WARNING: clang found in minimal mode" || echo "clang correctly not installed"
+          } > logs/llvm.log 2>&1
+          cat logs/llvm.log
+        fi
+        
+        # Test for conda (only in full mode)
+        if [ "$BUILD_MODE" = "full" ]; then
+          echo "Testing conda installation (full mode):"
+          docker exec -u sheen "$CONTAINER_NAME" bash -c '[ -d "$HOME/miniconda3" ] && echo "Miniconda directory exists" || echo "Miniconda not installed"' > logs/conda.log 2>&1
+        else
+          echo "Skipping conda test (minimal mode)"
+          echo "Conda not expected in minimal mode" > logs/conda.log
+        fi
         cat logs/conda.log
         
     - name: Test helper functions and fallback configuration
@@ -209,19 +282,27 @@ jobs:
       if: steps.build_and_run.outputs.container_name != '' && success()
       run: |
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"
+        BUILD_MODE="${{ matrix.build_mode }}"
         
-        # Check if zsh helper functions are defined
-        echo "Testing helper functions:"
-        {
-          docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_omz' || echo "Helper install_omz not defined, but continuing"
-          docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_zsh_plugins' || echo "Helper install_zsh_plugins not defined, but continuing"
-        } > logs/helper_functions.log 2>&1
-        cat logs/helper_functions.log
-        
-        # Check if Oh My Zsh is installed
-        echo "Checking Oh My Zsh installation:"
-        docker exec -u sheen "$CONTAINER_NAME" zsh -c '[ -d "$HOME/.oh-my-zsh" ] && echo "Oh My Zsh installed" || echo "Oh My Zsh not installed (using fallback)"' > logs/omz.log 2>&1
-        cat logs/omz.log
+        # Only test helper functions in full mode with ZSH
+        if [ "$BUILD_MODE" = "full" ]; then
+          # Check if zsh helper functions are defined
+          echo "Testing helper functions:"
+          {
+            docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_omz' || echo "Helper install_omz not defined, but continuing"
+            docker exec -u sheen "$CONTAINER_NAME" zsh -c 'type install_zsh_plugins' || echo "Helper install_zsh_plugins not defined, but continuing"
+          } > logs/helper_functions.log 2>&1
+          cat logs/helper_functions.log
+          
+          # Check if Oh My Zsh is installed
+          echo "Checking Oh My Zsh installation:"
+          docker exec -u sheen "$CONTAINER_NAME" zsh -c '[ -d "$HOME/.oh-my-zsh" ] && echo "Oh My Zsh installed" || echo "Oh My Zsh not installed (using fallback)"' > logs/omz.log 2>&1
+          cat logs/omz.log
+        else
+          echo "Skipping helper function tests (minimal mode - no ZSH)"
+          echo "Helper functions not expected in minimal mode" > logs/helper_functions.log
+          echo "Oh My Zsh not expected in minimal mode" > logs/omz.log
+        fi
         
     - name: Run security checks
       id: security_checks
@@ -253,6 +334,8 @@ jobs:
         # Combine all logs and add timestamps
         echo "==== CI SUMMARY ====" > logs/combined.log
         echo "Date: $(date)" >> logs/combined.log
+        echo "OS Version: ${{ matrix.os_version }}" >> logs/combined.log
+        echo "Build Mode: ${{ matrix.build_mode }}" >> logs/combined.log
         
         if [[ "${{ job.status }}" == "success" ]]; then
           echo "CI Status: SUCCESS" >> logs/combined.log
@@ -312,7 +395,7 @@ jobs:
       if: failure() || env.FAILED == 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: debug-info
+        name: debug-info-${{ matrix.os_version }}-${{ matrix.build_mode }}
         path: |
           logs/
         retention-days: 7
@@ -321,7 +404,7 @@ jobs:
       if: success() && env.FAILED != 'true'
       uses: actions/upload-artifact@v4
       with:
-        name: ci-summary
+        name: ci-summary-${{ matrix.os_version }}-${{ matrix.build_mode }}
         path: |
           logs/combined.log
         retention-days: 3
@@ -330,7 +413,7 @@ jobs:
       if: always() && steps.build_and_run.outputs.container_name != ''
       run: |
         echo "Cleaning up container with setup.sh"
-        ./setup.sh -s
+        ./setup.sh -o ${{ matrix.os_version }} -m ${{ matrix.build_mode }} -s
         
         # Verify cleanup
         CONTAINER_NAME="${{ steps.build_and_run.outputs.container_name }}"

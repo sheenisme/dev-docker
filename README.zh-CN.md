@@ -14,6 +14,11 @@ This repository provides a highly customizable Docker-based development environm
 
 一个定制化的 Docker 开发环境，预装了常用开发工具，设计为易于设置且具有高可靠性。
 
+**📚 文档导航：**
+- [快速入门指南](docs/QUICKSTART.md) - 3步快速开始
+- [配置示例](docs/EXAMPLES.md) - 详细配置示例
+- [English Documentation](README.md) - 英文文档
+
 ---
 
 ## 📦 前置条件
@@ -31,9 +36,41 @@ This repository provides a highly customizable Docker-based development environm
 # 赋予脚本可执行权限
 chmod +x setup.sh
 
-# 运行脚本（默认：构建镜像、启动容器并显示 IP）
+# 使用默认设置运行（Ubuntu 22.04，完整模式）
 ./setup.sh
+
+# 或者指定操作系统版本和构建模式
+./setup.sh -o ubuntu2404 -m full       # Ubuntu 24.04，完整模式
+./setup.sh -o ubuntu2004 -m minimal    # Ubuntu 20.04，精简模式
+./setup.sh -o centos8 -m full          # CentOS Stream 8，完整模式
 ```
+
+### 构建模式
+
+项目支持两种构建模式：
+
+- **full（完整模式）**（默认）：包含所有开发工具
+  - LLVM/Clang 工具链（版本 18）
+  - ZSH 搭配 Oh My Zsh 及插件
+  - Miniconda Python 发行版
+  - 完整的开发环境
+
+- **minimal（精简模式）**：轻量级安装
+  - 仅包含必要工具（gcc、git、vim 等）
+  - Bash shell（不安装 ZSH）
+  - 不包含 LLVM/Clang
+  - 不包含 Miniconda
+  - 构建时间更快，镜像体积更小
+
+### 支持的操作系统版本
+
+| OS 版本 | 基础镜像 | 描述 |
+|---------|----------|------|
+| `ubuntu2004` | Ubuntu 20.04 | Focal Fossa (LTS) |
+| `ubuntu2204` | Ubuntu 22.04 | Jammy Jellyfish (LTS) - **默认** |
+| `ubuntu2404` | Ubuntu 24.04 | Noble Numbat (LTS) |
+| `centos7` | CentOS 7 | CentOS 7 |
+| `centos8` | CentOS Stream 8 | CentOS Stream 8 |
 
 ### 脚本参数说明
 
@@ -41,18 +78,33 @@ chmod +x setup.sh
 
 | 参数 | 说明                           |
 |------|--------------------------------|
+| `-o OS_VERSION` | 指定操作系统版本（见上表） |
+| `-m MODE` | 构建模式：`minimal` 或 `full`（默认：full） |
 | `-b` | 构建镜像、启动容器并显示 IP    |
 | `-r` | 仅启动容器并显示 IP（跳过构建）|
 | `-i` | 仅显示容器 IP                  |
 | `-s` | 停止并删除容器                 |
 | `-c` | 显示当前配置信息               |
+| `-l` | 列出可用的操作系统版本         |
 | `-h` | 显示帮助信息                   |
 
 **示例：**
 
 ```shell
-./setup.sh -b   # 构建并启动
-./setup.sh -s   # 停止并删除容器
+# 列出可用的操作系统版本
+./setup.sh -l
+
+# 构建 Ubuntu 24.04 完整模式（默认）
+./setup.sh -o ubuntu2404 -b
+
+# 构建 CentOS 8 精简模式
+./setup.sh -o centos8 -m minimal -b
+
+# 使用默认设置构建并运行
+./setup.sh
+
+# 停止并删除容器
+./setup.sh -s
 ```
 
 ### 环境变量
@@ -104,9 +156,14 @@ chmod +x setup.sh
 
 - **默认容器用户：** `sheen`
 - **默认密码：** `123456`
-- **工作区挂载：** 宿主机 `~/workspace/dev_container_sheen` 挂载到容器 `/home/sheen/workspace`
+- **工作区挂载：** 宿主机 `~/workspace/dev_<os_version>_<mode>_<username>` 挂载到容器 `/home/sheen/workspace`
+  - 示例：Ubuntu 22.04 完整模式下为 `~/workspace/dev_ubuntu2204_full_sheen`
+- **容器命名：** 容器名称基于操作系统版本和构建模式
+  - 格式：`dev_<os_version>_<mode>_<username>`
+  - 示例：`dev_ubuntu2204_full_sheen`
 - **SSH 支持：** 容器暴露 22 端口，可通过 SSH 访问
 - **GPU 支持：** 如检测到 NVIDIA runtime 自动启用 GPU
+- **Shell：** ZSH（完整模式）或 Bash（精简模式）
 
 ---
 
@@ -177,15 +234,33 @@ cd scripts
 
 ## 🧩 ZSH 和开发工具
 
-容器预装了 ZSH 外壳并配置了 Oh My Zsh，但即使安装失败也能正常使用：
+### 构建模式对比
 
-### ZSH 特性
+| 功能 | 完整模式 | 精简模式 |
+|------|----------|----------|
+| Shell | ZSH + Oh My Zsh | Bash |
+| LLVM/Clang | ✅ 版本 18 | ❌ |
+| Python 发行版 | Miniconda | 系统 Python 3 |
+| 开发工具 | 完整套装 | 仅必要工具（gcc、git、cmake） |
+| 镜像大小 | 较大（~2-3GB） | 较小（~800MB-1GB） |
+| 构建时间 | 较长（~10-15分钟） | 较快（~5-8分钟） |
 
+### 完整模式功能
+
+完整模式容器包含：
+
+#### ZSH 配置
 - **Oh My Zsh:** 预装了常用插件（如安装成功）
 - **备选配置:** 即使 Oh My Zsh 安装失败，基本 ZSH 设置也能工作
-- **助手函数:** 如果 Oh My Zsh 未安装，可以手动安装
+- **助手函数:** 提供手动安装命令
 
-### 助手命令
+#### 开发工具
+- **LLVM/Clang:** 完整工具链（版本 18），包括 clangd、lld、lldb
+- **Python:** Miniconda 发行版，带 conda 包管理器
+- **构建工具:** gcc、cmake、ninja、make、autotools
+- **额外工具:** ripgrep、tmux、jq 等
+
+### 助手命令（仅完整模式）
 
 如果 Oh My Zsh 未安装（登录时会看到提示信息），你可以使用以下命令：
 
@@ -197,13 +272,19 @@ install_omz
 install_zsh_plugins
 ```
 
-### 开发工具
+### 精简模式功能
 
-容器包含：
-- LLVM/Clang（版本 18）
-- Python 3 及 pip
-- Git 和常用开发工具
-- Miniconda（自动添加到 PATH）
+精简模式适用于：
+- 快速开发环境
+- CI/CD 流水线
+- 资源受限环境
+- 基础编译和测试任务
+
+包含：
+- 必要构建工具（gcc、make、cmake）
+- 版本控制（git）
+- 文本编辑器（vim）
+- 基础工具（curl、wget、ssh）
 
 ---
 
@@ -253,5 +334,10 @@ install_zsh_plugins
 
 ## 📝 更新日志
 
-- **2025-05-30**：(V0.1.1) 修复工作区挂载问题并增强 ZSH 配置的可靠性。
-- **2025-05-29**：(V0.1.0) 首次发布。
+- **2026-01-29**：(V0.2.0) 增加多操作系统支持和构建模式
+  - 支持 Ubuntu 20.04、22.04、24.04
+  - 支持 CentOS 7、Stream 8
+  - 两种构建模式：精简模式和完整模式
+  - 通过命令行参数灵活配置
+- **2025-05-30**：(V0.1.1) 修复工作区挂载问题并增强 ZSH 配置的可靠性
+- **2025-05-29**：(V0.1.0) 首次发布
