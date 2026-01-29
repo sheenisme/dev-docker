@@ -17,7 +17,6 @@ A customized Docker development environment with pre-installed development tools
 **📚 Documentation:**
 - [Quick Start Guide](docs/QUICKSTART.md) - Get started in 3 steps
 - [Configuration Examples](docs/EXAMPLES.md) - Detailed configuration examples
-- [中文文档](README.zh-CN.md) - Chinese documentation
 
 ---
 

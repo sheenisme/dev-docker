@@ -52,6 +52,16 @@ jobs:
           - os_version: centos7
             build_mode: full
             display_name: "CentOS 7 (Full)"
+          
+          # CentOS Stream 8 - Minimal mode
+          - os_version: centos8
+            build_mode: minimal
+            display_name: "CentOS Stream 8 (Minimal)"
+          
+          # CentOS Stream 8 - Full mode
+          - os_version: centos8
+            build_mode: full
+            display_name: "CentOS Stream 8 (Full)"
     
     name: Build & Test - ${{ matrix.display_name }}
     

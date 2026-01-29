@@ -17,7 +17,6 @@ This repository provides a highly customizable Docker-based development environm
 **📚 文档导航：**
 - [快速入门指南](docs/QUICKSTART.md) - 3步快速开始
 - [配置示例](docs/EXAMPLES.md) - 详细配置示例
-- [English Documentation](README.md) - 英文文档
 
 ---
 

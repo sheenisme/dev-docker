@@ -20,6 +20,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Configure package manager sources based on distribution
 RUN if [ "${DISTRO_NAME}" = "ubuntu" ]; then \
+    # Use Tsinghua mirror
     sed -i 's@http://archive.ubuntu.com/@http://mirrors.tuna.tsinghua.edu.cn/@g' /etc/apt/sources.list || \
     sed -i 's@http://archive.ubuntu.com/@http://mirrors.tuna.tsinghua.edu.cn/@g' /etc/apt/sources.list.d/ubuntu.sources; \
     sed -i 's@http://security.ubuntu.com/@http://mirrors.tuna.tsinghua.edu.cn/@g' /etc/apt/sources.list || \
@@ -30,9 +31,21 @@ fi
 RUN if [ "${DISTRO_NAME}" = "ubuntu" ]; then \
     apt update && apt install -y ca-certificates && update-ca-certificates; \
 elif [ "${DISTRO_NAME}" = "centos" ]; then \
-    sed -e 's|^mirrorlist=|#mirrorlist=|g' \
-        -e 's|^#baseurl=http://mirror.centos.org|baseurl=https://mirrors.tuna.tsinghua.edu.cn|g' \
-        -i.bak /etc/yum.repos.d/CentOS-*.repo || true; \
+    # CentOS 7 is EOL, use Tsinghua vault repositories
+    if grep -q "CentOS Linux release 7" /etc/centos-release 2>/dev/null || [ "${DISTRO_VERSION}" = "7" ]; then \
+        sed -i \
+            -e 's|^mirrorlist=|#mirrorlist=|g' \
+            -e 's|^#baseurl=http://mirror.centos.org/centos/\$releasever|baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009|g' \
+            -e 's|^#baseurl=http://mirror.centos.org|baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/7.9.2009|g' \
+            /etc/yum.repos.d/CentOS-*.repo; \
+    else \
+        # CentOS Stream 8 - use Tsinghua vault path
+        sed -i \
+            -e 's|^mirrorlist=|#mirrorlist=|g' \
+            -e 's|^#baseurl=http://mirror.centos.org/\$contentdir/\$stream|baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/8-stream|g' \
+            -e 's|^#baseurl=http://mirror.centos.org|baseurl=https://mirrors.tuna.tsinghua.edu.cn/centos-vault/8-stream|g' \
+            /etc/yum.repos.d/CentOS-Stream-*.repo; \
+    fi; \
     yum install -y ca-certificates && update-ca-trust; \
 fi
 
@@ -63,7 +76,7 @@ RUN if [ "${DISTRO_NAME}" = "ubuntu" ]; then \
         locales \
         tldr \
         net-tools telnet iputils-ping \
-        unzip p7zip-full 7zip \
+        unzip p7zip-full \
         ffmpeg jq poppler-utils imagemagick \
         ripgrep \
         tmux \
@@ -80,9 +93,20 @@ fi
 
 # Install development tools
 RUN if [ "${DISTRO_NAME}" = "ubuntu" ]; then \
+    # Select libstdc++ version based on Ubuntu version
+    if [ "${DISTRO_VERSION}" = "20.04" ]; then \
+        LIBSTDCXX_PKG="libstdc++-9-dev"; \
+    elif [ "${DISTRO_VERSION}" = "22.04" ]; then \
+        LIBSTDCXX_PKG="libstdc++-12-dev"; \
+    elif [ "${DISTRO_VERSION}" = "24.04" ]; then \
+        LIBSTDCXX_PKG="libstdc++-13-dev"; \
+    else \
+        LIBSTDCXX_PKG="libstdc++-12-dev"; \
+    fi; \
     apt install -y \
         gcc \
-        libstdc++-12-dev \
+        g++ \
+        ${LIBSTDCXX_PKG} \
         cmake \
         make \
         ninja-build \
@@ -100,14 +124,18 @@ elif [ "${DISTRO_NAME}" = "centos" ]; then \
         gcc gcc-c++ \
         cmake3 \
         make \
-        ninja-build \
         automake \
         autoconf \
         libtool \
         pkgconfig \
         gmp-devel \
-        libyaml-devel \
         mpfr-devel; \
+    if yum list available ninja-build >/dev/null 2>&1; then \
+        yum install -y ninja-build; \
+    fi; \
+    if yum list available libyaml-devel >/dev/null 2>&1; then \
+        yum install -y libyaml-devel; \
+    fi; \
 fi
 
 # Install build essentials and Python
@@ -122,8 +150,11 @@ elif [ "${DISTRO_NAME}" = "centos" ]; then \
     yum install -y \
         python3 python3-pip python3-devel \
         ncurses-devel libxml2-devel \
-        openblas-devel libffi-devel openssl-devel libjpeg-devel \
+        libffi-devel openssl-devel libjpeg-devel \
         boost-devel htop rsync; \
+    if yum list available openblas-devel >/dev/null 2>&1; then \
+        yum install -y openblas-devel; \
+    fi; \
 fi
 
 # Clean up package cache
